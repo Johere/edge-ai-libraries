@@ -26,7 +26,8 @@ jobs:
       
       - name: Build Docker image
         run: |
-          cd microservices/multilevel-video-understanding
+          ls
+          cd edge-ai-libraries/microservices/multilevel-video-understanding
           chmod +x ./setup_docker.sh
           ./setup_docker.sh --build
           
