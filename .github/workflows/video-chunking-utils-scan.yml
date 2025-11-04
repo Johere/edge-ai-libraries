@@ -38,7 +38,7 @@ jobs:
         
 
   clamav-scan:
-    runs-on: ubuntu-22.04-32core-128GB
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
     steps:
@@ -51,7 +51,7 @@ jobs:
           scan-scope: "all"  
           output-format: "txt" 
           fail-on-findings: "false"
-          paths: "libraries/video-chunking-utils/"
+          paths: "libraries/video-chunking-utils"
           exclude_dirs: ".git,tests,.pytest_cache,__pycache__,.venv"
           
       - name: Upload Report
