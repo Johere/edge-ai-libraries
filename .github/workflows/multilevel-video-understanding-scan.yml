@@ -22,6 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@8edcb1bdb4e267140fa742c62e395cd74f332709
         with:
+          ref: add-video-understanding
           persist-credentials: false
       
       - name: Build Docker image
