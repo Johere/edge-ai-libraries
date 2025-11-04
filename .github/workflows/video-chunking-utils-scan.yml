@@ -1,5 +1,6 @@
-name: "[GEN-AI] Audio-analyzer-CI"
-run-name: "[GEN-AI-Audio-analyzer-CI] PR  workflow (by @${{ github.actor }} via ${{ github.event_name }})"
+name: "[Video Chunking Utils] SDLe Scans - Scan Bandit Virus"
+run-name: "[Video Chunking Utils] SDLe Scans - Scan Bandit Virus"
+
 
 
 # Only run at most 1 workflow concurrently per PR, unlimited for branches
