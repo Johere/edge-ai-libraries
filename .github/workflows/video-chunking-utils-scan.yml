@@ -13,6 +13,8 @@ on:
     branches: [ "main", "dev/vcu-cicd" ]
   workflow_call:
   workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * 0"  # 2 a.m. on Sunday
 
 jobs:
   bandit-scan:
