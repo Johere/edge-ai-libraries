@@ -9,8 +9,6 @@ run-name: "[Multilevel Video Understanding] SDLe Scans - Scan Trivy Bandit Virus
 #   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 on:
-  push:
-    branches: [ "main", "dev/mvu-cicd" ]
   workflow_call:
   workflow_dispatch:
   schedule:
