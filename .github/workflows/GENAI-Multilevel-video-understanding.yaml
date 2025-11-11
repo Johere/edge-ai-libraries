@@ -58,7 +58,7 @@ jobs:
           severity: "HIGH,CRITICAL"  
           format: "table"
           report_suffix: "-image-multilevel-video-understanding-html-CT248"
-          generate_sbom: "false"
+          generate_sbom: "true"
 
       - name: Run trivy Scan - multilevel-video-understanding (SPDX SBOM)
         uses: open-edge-platform/orch-ci/.github/actions/security/trivy@27276444a9bcf247a27369406686b689933bd1ff
@@ -71,7 +71,7 @@ jobs:
           format: "spdx-json"
           scanners: "vuln"
           report_suffix: "-image-multilevel-video-understanding-spdx-CT248"
-          generate_sbom: "false"
+          generate_sbom: "true"
 
       - name: Scan Dockerfile with Trivy
         uses: open-edge-platform/orch-ci/.github/actions/security/trivy@27276444a9bcf247a27369406686b689933bd1ff
