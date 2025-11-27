@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Multi-level Video Understanding Service"
     API_DESCRIPTION: str = "API for intelligent video summarization based on Large Language Models and Vision Language Models."
     MAX_CONCURRENT_REQUESTS: int = Field(6, env="MAX_CONCURRENT_REQUESTS")
+    REQUEST_TIMEOUT: int = Field(14400, env="REQUEST_TIMEOUT")        # Increase request timeout to support very long video processing (4 hours)
 
     # API Health check configuration
     API_STATUS: str = "healthy"
@@ -62,9 +63,9 @@ class Settings(BaseSettings):
     VIDEO_FRAME_HEIGHT: int  = Field(270, env="VIDEO_FRAME_HEIGHT")             # Frame height for resizing
     VIDEO_FRAME_WIDTH: int = Field(480, env="VIDEO_FRAME_WIDTH")                # Frame width for resizing
     
-    ## Request settings
-    REQUEST_TIMEOUT: int = 300      # seconds
-    MAX_RETRIES: int = 3
+    ## Model serving request settings
+    MODEL_REQUEST_TIMEOUT: int = Field(300, env="MODEL_REQUEST_TIMEOUT")        # Seconds
+    MODEL_MAX_RETRIES: int = Field(3, env="MODEL_MAX_RETRIES")
     
     # Inference parameters    
     LLM_REMOVE_THINKING: bool = True

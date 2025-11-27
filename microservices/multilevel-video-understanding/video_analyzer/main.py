@@ -43,5 +43,7 @@ if __name__ == "__main__":
         port=8000,
         reload=settings.DEBUG,
         log_level="debug" if settings.DEBUG else "info",
-        timeout_keep_alive=180,  # Increase keep-alive timeout to 3 minutes (180 seconds)
+        timeout_keep_alive=180,                             # Increase keep-alive timeout to 3 minutes (180 seconds)
+        timeout=settings.REQUEST_TIMEOUT,
+        limit_max_requests=settings.MAX_CONCURRENT_REQUESTS,
     )

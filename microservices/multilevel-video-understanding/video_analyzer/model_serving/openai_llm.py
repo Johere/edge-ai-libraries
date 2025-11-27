@@ -40,8 +40,8 @@ class LLM:
         logger.debug(f"Remove thinking: {'Enabled' if self.remove_thinking else 'Disabled'}")
 
         # Concurrency settings
-        self.timeout = settings.REQUEST_TIMEOUT
-        self.max_retries = settings.MAX_RETRIES
+        self.timeout = settings.MODEL_REQUEST_TIMEOUT
+        self.max_retries = settings.MODEL_MAX_RETRIES
         self.temperature = settings.DEFAULT_TEMPERATURE
         
         # Use remote inference
