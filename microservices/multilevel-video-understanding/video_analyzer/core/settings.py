@@ -2,11 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import List
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
+from video_analyzer.core import prompts
 
 
 class PeltChunkingSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_nested_delimiter="__")
     initial_pen: float = 20
     max_iteration: int = 5
     max_frame_size: int = 512
@@ -16,7 +18,22 @@ class PeltChunkingSettings(BaseSettings):
     min_chunk_duration: float = 1           # Minimum duration for each chunk: unit: seconds
 
 class UniformChunkingSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_nested_delimiter="__")
     chunk_duration: float = 15
+
+class SummaryPrompts(BaseSettings):
+    model_config = SettingsConfigDict(env_nested_delimiter="__")
+    GLOBAL_PROMPT: str = prompts.GLOBAL_PROMPT
+    MACRO_CHUNK_PROMPT: str = prompts.MACRO_CHUNK_PROMPT
+    LOCAL_PROMPT: str = prompts.LOCAL_PROMPT
+    T_MINUS_1_PROMPT: str = prompts.T_MINUS_1_PROMPT
+    # user specific prompt inplace
+    GLOBAL_PROMPT_WITH_QUESTION: str = prompts.GLOBAL_PROMPT_WITH_QUESTION
+    MACRO_CHUNK_PROMPT_WITH_QUESTION: str = prompts.MACRO_CHUNK_PROMPT_WITH_QUESTION
+    # video subtitles inplace
+    LOCAL_PROMPT_WITH_SUBTITLES: str = prompts.LOCAL_PROMPT_WITH_SUBTITLES
+    MACRO_CHUNK_PROMPT_WITH_QUESTION_AND_SUBTITLES: str = prompts.MACRO_CHUNK_PROMPT_WITH_QUESTION_AND_SUBTITLES
+    GLOBAL_PROMPT_WITH_QUESTION_AND_SUBTITLES: str = prompts.GLOBAL_PROMPT_WITH_QUESTION_AND_SUBTITLES
 
 class Settings(BaseSettings):
     """
@@ -24,10 +41,12 @@ class Settings(BaseSettings):
     
     These settings can be configured via environment variables on host or inside container.
     """
-    DEBUG: bool = Field(False, env="DEBUG")             # Debug flag to run API server with DEBUG logs. Used in Development only.
+    model_config = SettingsConfigDict(env_nested_delimiter="__")
+    
+    DEBUG: bool = Field(False, env="DEBUG")                     # Debug flag to run API server with DEBUG logs. Used in Development only.
 
     # API configuration
-    API_V1_PREFIX: str = Field("/v1", env="API_V1_PREFIX")    # API version prefix to be used with each endpoint route
+    API_V1_PREFIX: str = Field("/v1", env="API_V1_PREFIX")      # API version prefix to be used with each endpoint route
     API_VER: str = Field("1.0.0", env="API_VER")
     APP_NAME: str = "Multi-level Video Understanding Service"
     API_DESCRIPTION: str = "API for intelligent video summarization based on Large Language Models and Vision Language Models."
@@ -49,8 +68,11 @@ class Settings(BaseSettings):
     # Summarizer configs
     DEFAULT_SUMMARIZATION_METHOD: str = "USE_ALL_T-1"
     ## Default levels for multi-level description
-    DEFAULT_LEVELS: int = 3                     # Details: level 0: micro_chunks, level 2~(N-1): macro_chunks, level N: global
-    DEFAULT_LEVEL_SIZES: List = [1, 6, -1]      # chunk group size for each level, -1 means use single group
+    DEFAULT_LEVELS: int = 3                                 # Details: level 0: micro_chunks, level 2~(N-1): macro_chunks, level N: global
+    DEFAULT_LEVEL_SIZES: List = [1, 6, -1]                  # chunk group size for each level, -1 means use single group
+    SUMMARY_PROMPTS: SummaryPrompts = SummaryPrompts()      # Video analyzer core prompts
+    ## Subtitle payload size limit (bytes) for inline text or decompressed b64gzip
+    MAX_SUBTITLE_BYTES: int = Field(10 * 1024 * 1024, env="MAX_SUBTITLE_BYTES")  # default: 10MB
     
     ## Frame processing settings
     DEFAULT_PROCESS_FPS: float = Field(1, env="DEFAULT_PROCESS_FPS")

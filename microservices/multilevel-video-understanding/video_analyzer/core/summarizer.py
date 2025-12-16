@@ -17,19 +17,12 @@ from video_chunking.data import ChunkMeta, MicroChunkMeta, MacroChunkMeta
 from video_analyzer.schemas.summarization import ErrorResponse
 
 from video_analyzer.core.settings import settings
-from video_analyzer.core.prompts import (
-    GLOBAL_PROMPT, 
-    GLOBAL_PROMPT_WITH_QUESTION,
-    MACRO_CHUNK_PROMPT,
-    MACRO_CHUNK_PROMPT_WITH_QUESTION,
-    LOCAL_PROMPT, 
-    T_MINUS_1_PROMPT
-)
 from video_analyzer.schemas.summarization import SUMMARIZATION_METHOD_TYPE
 from video_analyzer.model_serving import LLM, VLM
 from video_analyzer.utils.summarization_utils import remove_brackets, uniform_sample, warn_unused_kwargs
 from video_analyzer.utils.logger import logger
 from video_analyzer.utils.file_utils import robust_video_reader
+from video_analyzer.utils.subtitle_utils import load_subtitles, extract_subtitles_for_chunk
 
 
 class VideoSummarizer:
@@ -47,6 +40,7 @@ class VideoSummarizer:
         vlm_api_key: Optional[str] = "Empty",
         llm_api_key: Optional[str] = "Empty",
         user_prompt: Optional[str] = None,
+        video_subtitles: Optional[Dict[str, str]] = None,
         method: Optional[str] = settings.DEFAULT_SUMMARIZATION_METHOD,
         levels: Optional[int] = settings.DEFAULT_LEVELS,
         level_sizes: Optional[list[int]] = settings.DEFAULT_LEVEL_SIZES,
@@ -66,6 +60,10 @@ class VideoSummarizer:
             vlm_api_key: API key for remote vision-language model inference
             llm_api_key: API key for remote language model
             user_prompt: User prompt to guide summarization details
+            video_subtitles: Video subtitles, this should follow SubRip format. Accept video_subtitles as:
+                             - HTTP/HTTPS URL to an .srt file (preferred for containers): {"url": str}
+                             - Inline SRT text for short videos: {"text": str}
+                             - Base64+gzip SRT payload for long videos: {"b64gzip": str}
             method: Summarization method, choices: [SIMPLE, USE_VLM_T-1, USE_LLM_T-1, USE_ALL_T-1]
             levels: total levels for hierarchical summarization
             level_sizes: chunk group size for each level
@@ -73,6 +71,7 @@ class VideoSummarizer:
             process_fps: Extract frames at process_fps for input video
         """
         self.video_path = video_path
+        self.subtitles = None
         self.user_prompt = user_prompt
 
         # Multi-level configurations
@@ -106,6 +105,25 @@ class VideoSummarizer:
                     detail=ErrorResponse(
                         error_message=f"Summarization failed!",
                         details=f"Invalid process_fps is specified: ({self.process_fps}) "
+                    ).model_dump()
+                )
+        
+        # Parse subtitles (if has)
+        if video_subtitles is not None:
+            logger.debug(f"Received video subtitles from request: {video_subtitles}")
+            try:
+                # size guard
+                max_bytes = settings.MAX_SUBTITLE_BYTES
+                self.subtitles = load_subtitles(video_subtitles, max_bytes)
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to load subtitles: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ErrorResponse(
+                        error_message="Summarization failed!",
+                        details=f"Invalid subtitles input: {e}"
                     ).model_dump()
                 )
 
@@ -372,6 +390,7 @@ class VideoSummarizer:
         # Use semaphore to limit concurrent requests
         async with self._semaphore:
             frames = await self.encode_chunk(chunk)
+            subtitle = await self._get_subtitle(chunk)
 
             # If frames extraction failed, handle the error
             if not frames:
@@ -380,12 +399,18 @@ class VideoSummarizer:
                 return
 
             # Prepare question/prompt
-            question = LOCAL_PROMPT.format(st_tm=round(chunk.time_st), end_tm=round(chunk.time_end))
+            if subtitle is not None:
+                question = settings.SUMMARY_PROMPTS.LOCAL_PROMPT_WITH_SUBTITLES.format(st_tm=round(chunk.time_st),
+                                                                                       end_tm=round(chunk.time_end),
+                                                                                       chunk_subtitle=subtitle)
+            else:
+                question = settings.SUMMARY_PROMPTS.LOCAL_PROMPT.format(st_tm=round(chunk.time_st),
+                                                                        end_tm=round(chunk.time_end))
 
             # Add previous chunk context if available and enabled
             if self.use_t_minus_1_for_vlm and chunk.id > 0:
                 t_minus_1_chunk = self.chunk_dict[(chunk.level, chunk.id - 1)]
-                question = T_MINUS_1_PROMPT.format(
+                question = settings.SUMMARY_PROMPTS.T_MINUS_1_PROMPT.format(
                     dur=round(t_minus_1_chunk.time_end-t_minus_1_chunk.time_st),
                     past_summary=t_minus_1_chunk.desc,
                     st_tm=round(t_minus_1_chunk.time_st),
@@ -424,6 +449,7 @@ class VideoSummarizer:
         Args:
             chunk: Macro chunk to summarize
         """
+        subtitle = await self._get_subtitle(chunk)
         
         # Use semaphore to limit concurrent requests
         async with self._semaphore:
@@ -431,39 +457,7 @@ class VideoSummarizer:
             for subchunk in chunk.chunk_list:
                 subchunk_summaries.append(subchunk.get_timestamp_desc() + '\n' + subchunk.desc)
 
-            # Choose prompt based on chunk level
-            if self.user_prompt is not None:
-                if self.rootLevel == chunk.level:
-                    full_summ_prompt = GLOBAL_PROMPT_WITH_QUESTION.format(question=self.user_prompt)
-                else:
-                    full_summ_prompt = MACRO_CHUNK_PROMPT_WITH_QUESTION.format(
-                        st_tm=round(chunk.time_st),
-                        end_tm=round(chunk.time_end),
-                        question=self.user_prompt
-                    )
-            else:
-                if self.rootLevel == chunk.level:
-                    full_summ_prompt = GLOBAL_PROMPT
-                else:
-                    full_summ_prompt = MACRO_CHUNK_PROMPT.format(
-                        st_tm=round(chunk.time_st),
-                        end_tm=round(chunk.time_end)
-                    )
-
-            full_summ_prompt += '\n\n>|<\n{}\n>|<'
-            prompt = full_summ_prompt.format("\n>|<\n".join(subchunk_summaries))
-
-            if self.use_t_minus_1_for_llm:
-                # Add previous macro chunk context if available and enabled
-                # Exclude for global chunk
-                if chunk.level < self.rootLevel and chunk.id > 0:
-                    t_minus_1_macro_chunk = self.chunk_dict[(chunk.level, chunk.id - 1)]
-                    prompt = T_MINUS_1_PROMPT.format(
-                        dur=round(t_minus_1_macro_chunk.time_end-t_minus_1_macro_chunk.time_st),
-                        past_summary=t_minus_1_macro_chunk.desc,
-                        st_tm=round(t_minus_1_macro_chunk.time_st),
-                        end_tm=round(t_minus_1_macro_chunk.time_end)
-                    ) + '\n' + prompt
+            prompt = await self._build_macro_prompt(chunk=chunk, subtitle=subtitle, subchunk_summaries=subchunk_summaries)
 
             # Log input prompt
             logger.debug("<#####> macro chunk input")
@@ -519,7 +513,86 @@ class VideoSummarizer:
                 return []
 
         return frames
+    
+    async def _get_subtitle(self, chunk: ChunkMeta) -> str | None:
+        if self.subtitles is None:
+            return None
+        
+        if len(self.subtitles) == 0:
+            return None
+        
+        # Extract corresponding subtitles
+        chunk_subtitles = extract_subtitles_for_chunk(chunk, self.subtitles, overlap_threshold=0.5)
+        
+        return chunk_subtitles['full_text']
 
+    async def _build_macro_prompt(self, chunk, subtitle: Optional[str], subchunk_summaries: List[str]) -> str:
+        """
+        Build the macro/global prompt for a chunk, with optional user prompt and subtitles.
+        """
+        # Case switch dimensions:
+        # has_subtitle: bool
+        # has_user_prompt: bool
+        # is_global_level: bool
+        has_subtitle = subtitle is not None
+        has_user_prompt = self.user_prompt is not None
+        is_global_level = (self.rootLevel == chunk.level)
+        
+        # Derive an effective question without mutating self.user_prompt
+        effective_question = self.user_prompt if has_user_prompt else ( "summarize this video" if has_subtitle else None )
+        if has_subtitle and not has_user_prompt:
+            logger.warning(f"Video subtitles detected, but user prompt is missing, will use default user prompt: `{effective_question}`.")
+        
+        has_effective_question = (effective_question is not None)
+        match (has_subtitle, has_effective_question, is_global_level):
+            # Global level
+            case (True, True, True):
+                full_summ_prompt = settings.SUMMARY_PROMPTS.GLOBAL_PROMPT_WITH_QUESTION_AND_SUBTITLES.format(
+                    question=effective_question,
+                    chunk_subtitle=subtitle
+                )
+            case (False, True, True):
+                full_summ_prompt = settings.SUMMARY_PROMPTS.GLOBAL_PROMPT_WITH_QUESTION.format(
+                    question=effective_question
+                )
+            case (False, False, True):
+                full_summ_prompt = settings.SUMMARY_PROMPTS.GLOBAL_PROMPT
+
+            # Macro level (non-global)
+            case (True, True, False):
+                full_summ_prompt = settings.SUMMARY_PROMPTS.MACRO_CHUNK_PROMPT_WITH_QUESTION_AND_SUBTITLES.format(
+                    st_tm=round(chunk.time_st),
+                    end_tm=round(chunk.time_end),
+                    question=effective_question,
+                    chunk_subtitle=subtitle
+                )
+            case (False, True, False):
+                full_summ_prompt = settings.SUMMARY_PROMPTS.MACRO_CHUNK_PROMPT_WITH_QUESTION.format(
+                    st_tm=round(chunk.time_st),
+                    end_tm=round(chunk.time_end),
+                    question=effective_question
+                )
+            case (False, False, False):
+                full_summ_prompt = settings.SUMMARY_PROMPTS.MACRO_CHUNK_PROMPT.format(
+                    st_tm=round(chunk.time_st),
+                    end_tm=round(chunk.time_end)
+                )
+
+        # Attach subchunk summaries
+        full_summ_prompt += '\n\n>|<\n{}\n>|<'
+        prompt = full_summ_prompt.format("\n>|<\n".join(subchunk_summaries))
+
+        # Optional T-1 context for LLM (non-global levels)
+        if self.use_t_minus_1_for_llm and (chunk.level < self.rootLevel) and (chunk.id > 0):
+            t_minus_1_macro_chunk = self.chunk_dict[(chunk.level, chunk.id - 1)]
+            prompt = settings.SUMMARY_PROMPTS.T_MINUS_1_PROMPT.format(
+                dur=round(t_minus_1_macro_chunk.time_end - t_minus_1_macro_chunk.time_st),
+                past_summary=t_minus_1_macro_chunk.desc,
+                st_tm=round(t_minus_1_macro_chunk.time_st),
+                end_tm=round(t_minus_1_macro_chunk.time_end)
+            ) + '\n' + prompt
+
+        return prompt
 
 class ModelConfig:
     """Model configuration class, ensures information is printed only once"""

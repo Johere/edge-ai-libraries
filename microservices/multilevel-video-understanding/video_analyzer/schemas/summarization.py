@@ -36,7 +36,21 @@ class SummarizerMethodsManager:
 
 class SummarizationRequest(BaseModel):
     """Request schema for the summarization endpoint"""
-    video: Annotated[str, Field(description="Path to the video file, support 'file:/', 'http://', 'https://' and local path.")]
+    video: Annotated[str, Field(description="Path to the video file, support 'file://', 'http://', 'https://' and local path.")]
+    video_subtitles: Annotated[Optional[Dict[str, str]], Field(description=(
+        "Video subtitles in SubRip (.srt) format. Supported inputs:\n"
+        "- {\"url\": \"https://.../subs.srt\"}: Preferred in container environments. The service will download and parse via HTTP(S).\n"
+        "- {\"text\": \"1\\n00:00:00,000 --> 00:00:02,000\\n...\"}: Inline SRT text. Best for short videos/small subtitles.\n"
+        "- {\"b64gzip\": \"<base64>\"}: Base64 of gzip-compressed SRT. Recommended for long videos to reduce request size.\n"
+        "Notes:\n"
+        "- URL must be http/https; the service streams the download with a size cap.\n"
+        "- Inline text and b64gzip are checked against size limits (see settings.MAX_SUBTITLE_BYTES).\n"
+        "- For object storage, use pre-signed URLs (e.g., S3/MinIO).\n"
+        "Examples:\n"
+        "  {\"url\": \"https://bucket/video/subs.srt\"}\n"
+        "  {\"text\": \"1\\n00:00:00,000 --> 00:00:02,000\\nHello\\n...\"}\n"
+        "  {\"b64gzip\": \"H4sIAAAAA...\"}\n"
+    ))] = None
     prompt: Annotated[Optional[str], Field(description="User prompt to guide summarization details")] = None
     method: Annotated[Optional[str], Field(description="Summarization method")] = "USE_ALL_T-1"
     processor_kwargs: Annotated[Optional[Dict[str, Union[float, str, int, list[int]]]], 
