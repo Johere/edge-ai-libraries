@@ -47,6 +47,7 @@ async def summarize_video(
     try:
         # Parse request parameters
         video_path = validate_video_path(request.video)
+        video_subtitles = request.video_subtitles
         user_prompt = request.prompt
         method = request.method
         
@@ -69,6 +70,7 @@ async def summarize_video(
         summarizer = VideoSummarizer(
             video_path=video_path,
             user_prompt=user_prompt,
+            video_subtitles=video_subtitles,
             method=method,
             vlm_model_name=model_cfg.VLM_MODEL_NAME,
             llm_model_name=model_cfg.LLM_MODEL_NAME,

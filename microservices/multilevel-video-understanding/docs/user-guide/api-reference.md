@@ -84,6 +84,10 @@ Request parameters for the summarization endpoint
   - **levels**: Specify total levels for hierarchical summarization. Default as *3*.
   - **level_sizes**: Specify chunk group size for each level, must match with `levels`. Default as *[1, 6, -1]*, -1 means using single group at the level.
   - **chunking_method**: video chunking algorithm, choices: ["pelt", "uniform"], Default as *"pelt"*. Call video-chunking-utils with specific method, pelt with scene-switch based video chunking; uniform with 15s duration for video chunking.
+- **video_subtitles**: *Optional*. Video subtitles in SubRip (.srt) format to assist summarization. Supported inputs:
+  - `{"url": "https://.../subs.srt"}`: Download and parse via HTTP(S).
+  - `{"text": "1\n00:00:00,000 --> 00:00:02,000\nHello\n..."}`: Inline SRT text.
+  - `{"b64gzip": "<base64>"}`: Base64 of gzip-compressed SRT.
 
 **Response**
 A response with the processing status and summary output.
