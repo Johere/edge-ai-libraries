@@ -10,6 +10,11 @@ from video_analyzer.schemas.state import SummarizationStatus
 from video_analyzer.core.settings import settings
 
 
+class TASKNAME(Enum):
+    """Registered task names for prompt builders and pipelines."""
+    SUMMARY = "summary"
+    ENGINE_VALVES_SOP = "engine_valves_sop"
+
 class SUMMARIZATION_METHOD_TYPE(Enum):
     """
     Summarization method types
@@ -20,7 +25,7 @@ class SUMMARIZATION_METHOD_TYPE(Enum):
     USE_ALL_T_1 = "USE_ALL_T-1"         # Incorporate time dependency between consecutive chunks for both VLM and LLM inference
 
 
-class SummarizerMethodsManager:
+class SummarizerParamsManager:
     
     @staticmethod
     def list_supported_summarization_methods():
@@ -31,6 +36,17 @@ class SummarizerMethodsManager:
             list: a list of SUMMARIZATION_METHOD_TYPE members
         """
         available_list = [str(_.value) for _ in SUMMARIZATION_METHOD_TYPE]
+        return available_list
+    
+    @staticmethod
+    def list_supported_summarization_tasks():
+        """
+        Return all supported summarization tasks in class `TASKNAME`
+        
+        Returns:
+            list: a list of TASKNAME members
+        """
+        available_list = [str(_.value) for _ in TASKNAME]
         return available_list
 
 
@@ -52,7 +68,29 @@ class SummarizationRequest(BaseModel):
         "  {\"b64gzip\": \"H4sIAAAAA...\"}\n"
     ))] = None
     prompt: Annotated[Optional[str], Field(description="User prompt to guide summarization details")] = None
-    method: Annotated[Optional[str], Field(description="Summarization method")] = "USE_ALL_T-1"
+    method: Annotated[
+        Optional[str],
+        Field(description=(
+            "Summarization method selecting how consecutive chunks interact.\n"
+            "Supported values:\n"
+            "- 'SIMPLE': No temporal dependency between chunks.\n"
+            "- 'USE_VLM_T-1': Only the VLM stage consumes the previous chunk context.\n"
+            "- 'USE_LLM_T-1': Only the LLM stage consumes the previous chunk context.\n"
+            "- 'USE_ALL_T-1': Both stages rely on previous chunk context for maximum coherence.\n"
+            "Notes: Prefer the default unless you explicitly tune temporal dependencies."
+        )),
+    ] = SUMMARIZATION_METHOD_TYPE.USE_ALL_T_1
+    task: Annotated[
+        Optional[str],
+        Field(description=(
+            "Task name selecting the prompt/pipeline flavor.\n"
+            "Supported values:\n"
+            "- 'summary': Default multi-level video summarization (global/macro/local prompts).\n"
+            "- 'engine_valves_sop': Engine Valve Workstation SOP compliance analysis (Chinese prompts, SOP checking).\n"
+            "Notes: Unknown task names may be rejected by the prompt factory;\n"
+            "use the defaults unless you explicitly integrate a new task."
+        )),
+    ] = TASKNAME.SUMMARY
     processor_kwargs: Annotated[Optional[Dict[str, Union[float, str, int, list[int]]]], 
                                 Field(description="Summarization processing parameters: "
                                       "process_fps, chunking_method, levels, level_sizes, etc.")] = {}

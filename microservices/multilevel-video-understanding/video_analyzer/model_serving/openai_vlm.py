@@ -2,11 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import io
+import re
 import base64
-import logging
 from PIL import Image
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from video_analyzer.utils.logger import logger
+from video_analyzer.utils.summarization_utils import redact_base64
 from video_analyzer.core.settings import settings
 
 from video_analyzer.model_serving.openai_llm import LLM
@@ -28,20 +29,23 @@ class VLM(LLM):
     
     def __init__(
         self,
+        individual_frames_in_prompt: bool = False,
         **kwargs
     ):
         super().__init__(**kwargs)
         
         # Determine if we're using Kimi or Qwen based on model name
-        self.is_kimi = "kimi" in self.model_name.lower()
+        self.individual_frames_in_prompt = "kimi" in self.model_name.lower() or individual_frames_in_prompt
     
-    def infer(self, frames: List[Image.Image], question: str) -> str:
+    def infer(self, frames: List[Image.Image], content: str|List[Dict[str, Any]]) -> str:
         """
-        Run inference on a list of frames with a question, in sync mode
+        Run inference on a list of frames with a content, in sync mode
 
         Args:
             frames: List of PIL Image frames
-            question: Text prompt/question to ask about the frames
+            content: 
+                Option1. Text prompt to process
+                Option2. List of contents with user's prompts to process
 
         Returns:
             Model's response
@@ -50,14 +54,15 @@ class VLM(LLM):
             return "Error: Empty frame input"
 
         # Prepare messages based on model type
-        if self.is_kimi:
-            msgs = self._prepare_kimi_format(frames, question)
-            logger.debug("Using Kimi format for API request")
+        if self.individual_frames_in_prompt:
+            msgs = self._prepare_individual_frames_format(frames, content)
+            logger.debug("Using individual frames format for API request")
         else:
-            msgs = self._prepare_qwen_format(frames, question)
+            msgs = self._prepare_qwen_format(frames, content)
             logger.debug("Using Qwen format for API request")
 
         logger.debug(f"Sending request with {len(frames)} frames to model: {self.model_name}")
+        logger.debug(f"Sending request with messages: {redact_base64(msgs)}")
         logger.debug(f"API base URL: {self.client.base_url}")
 
         response = self._remote_infer(msgs)
@@ -67,13 +72,15 @@ class VLM(LLM):
             
         return response
     
-    async def async_infer(self, frames: List[Image.Image], question: str) -> str:
+    async def async_infer(self, frames: List[Image.Image], content: str|List[Dict[str, Any]]) -> str:
         """
-        Run inference on a list of frames with a question, in async mode
+        Run inference on a list of frames with a content, in async mode
 
         Args:
             frames: List of PIL Image frames
-            question: Text prompt/question to ask about the frames
+            content: 
+                Option1. Text prompt to process
+                Option2. List of contents with user's prompts to process
 
         Returns:
             Model's response
@@ -82,14 +89,16 @@ class VLM(LLM):
             return "Error: Empty frame input"
 
         # Prepare messages based on model type
-        if self.is_kimi:
-            msgs = self._prepare_kimi_format(frames, question)
-            logger.debug("Using Kimi format for API request")
+        if self.individual_frames_in_prompt:
+            msgs = self._prepare_individual_frames_format(frames, content)
+            logger.debug("Using individual frames format for API request")
         else:
-            msgs = self._prepare_qwen_format(frames, question)
+            msgs = self._prepare_qwen_format(frames, content)
             logger.debug("Using Qwen format for API request")
 
         logger.debug(f"Sending request with {len(frames)} frames to model: {self.model_name}")
+        logger.debug(f"Sending request with messages: {redact_base64(msgs)}")
+        logger.debug(f"API base URL: {self.client.base_url}")
 
         response = await self._async_remote_infer(msgs)
         
@@ -97,42 +106,113 @@ class VLM(LLM):
             response = self.remove_think_in_response(response)
         return response
 
-    def _prepare_qwen_format(self, frames: List[Image.Image], question: str) -> List[Dict[str, Any]]:
+    @staticmethod
+    def parse_multimodal_prompt(prompt: str) -> Tuple[List[Dict[str, Any]], bool]:
+        """
+        Split a unified prompt into interleaved text and media parts, supporting only
+        base64-embedded data URLs for images and videos.
+
+        Supported media tokens (case-insensitive):
+        - data:image/jpeg;base64,
+        - data:video/jpeg;base64,
+
+        Everything outside these tokens is treated as text. If the prompt contains
+        external references (file://, http://, https://), this method raises an error
+        because non-base64 media is not supported here.
+
+        Args:
+            prompt: The unified prompt string, can be multimodal(interleaved image-text or video-text) or pure text
+
+        Returns:
+            (content, is_multimodal)
+            - content: A list of content parts like
+              [{"type":"text","text":"..."}, {"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."}}, ...]
+            - is_multimodal: True if any image/video tokens were found; False for pure text
+        """
+        # Reject external references for now
+        if re.search(r"\b(?:file|https?)://", prompt, re.IGNORECASE):
+            raise NotImplementedError("Unsupported external references: file|http|https, "
+                                      "only base64 data URLs are supported (data:image/jpeg;base64, data:video/jpeg;base64)")
+
+        content: List[Dict[str, Any]] = []
+        is_multimodal = False
+
+        # Match only the explicitly supported base64 media tokens
+        pattern = re.compile(
+            r"(?P<url>data:(?:image|video)/jpeg;base64,[^\s\n]+)",
+            re.IGNORECASE,
+        )
+
+        pos = 0
+        for m in pattern.finditer(prompt):
+            before = prompt[pos:m.start()]
+            url = m.group('url')
+
+            # Emit preceding text (trimmed) if any
+            text_chunk = before.strip()
+            if text_chunk:
+                content.append({"type": "text", "text": text_chunk})
+
+            # Emit media by type
+            if url.lower().startswith("data:image/jpeg;base64,"):
+                content.append({"type": "image_url", "image_url": {"url": url}})
+            elif url.lower().startswith("data:video/jpeg;base64,"):
+                content.append({"type": "video_url", "video_url": {"url": url}})
+            is_multimodal = True
+
+            pos = m.end()
+
+        # Trailing text
+        tail = prompt[pos:].strip()
+        if tail:
+            content.append({"type": "text", "text": tail})
+
+        # If no media found, treat entire prompt as plain text and return is_multimodal=False
+        if not is_multimodal:
+            return ([{"type": "text", "text": prompt}], False)
+
+        return (content, True)
+
+    def _prepare_qwen_format(self, frames: List[Image.Image], content: str|List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Prepare message in Qwen format.
 
         Args:
             frames: List of PIL Image frames
-            question: Text prompt/question to ask about the frames
+            content: 
+                Option1. Text prompt to process
+                Option2. List of contents with user's prompts to process
 
         Returns:
             List of messages in Qwen format
         """
         # Convert frames to base64 encoded JPEG images
-        media_content = []
+        frames_b64 = []
         for frame in frames:
             buffer = io.BytesIO()
             frame.save(buffer, format="JPEG", quality=settings.JPEG_QUALITY)
-            media_content.append(base64.b64encode(buffer.getvalue()).decode("utf-8"))
+            frames_b64.append(base64.b64encode(buffer.getvalue()).decode("utf-8"))
+        
+        media_content = [{"type": "video_url", "video_url": {"url": f"data:video/jpeg;base64,{','.join(frames_b64)}"}}]
 
         # Construct request messages for Qwen format
-        return [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": question},
-                    {"type": "video_url", "video_url": {"url": f"data:video/jpeg;base64,{','.join(media_content)}"}},
-                ]
-            }
-        ]
+        if isinstance(content, str):
+            content, is_multimodal = self.parse_multimodal_prompt(content)
+            logger.debug(f"Unified prompt parsed as multimodal: {is_multimodal}")
+        content.extend(media_content)
+        
+        # Message
+        return [{"role": "user", "content": content}]
 
-    def _prepare_kimi_format(self, frames: List[Image.Image], question: str) -> List[Dict[str, Any]]:
+    def _prepare_individual_frames_format(self, frames: List[Image.Image], content: str|List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Prepare message in Kimi format.
+        Prepare message in individual frames format.
 
         Args:
             frames: List of PIL Image frames
-            question: Text prompt/question to ask about the frames
+            content: 
+                Option1. Text prompt to process
+                Option2. List of contents with user's prompts to process
 
         Returns:
             List of messages in Kimi format
@@ -144,17 +224,16 @@ class VLM(LLM):
             frame.save(buffer, format="JPEG", quality=settings.JPEG_QUALITY)
             base64_encoded_image = base64.b64encode(buffer.getvalue()).decode("utf-8")
             image_urls.append(f"data:image/jpeg;base64,{base64_encoded_image}")
+        
+        media_content = [
+                {"type": "image_url", "image_url": {"url": url}} for url in image_urls
+            ]
 
         # Construct request messages for Kimi format
-        return [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": question},
-                    *[
-                        {"type": "image_url", "image_url": {"url": url}}
-                        for url in image_urls
-                    ]
-                ],
-            }
-        ]
+        if isinstance(content, str):
+            content, is_multimodal = self.parse_multimodal_prompt(content)
+            logger.debug(f"Unified prompt parsed as multimodal: {is_multimodal}")
+        content.extend(media_content)
+            
+        # Message
+        return [{"role": "user", "content": content}]
