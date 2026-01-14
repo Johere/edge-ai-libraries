@@ -50,12 +50,14 @@ class LLM:
         
         logger.debug(f"Using remote inference serving with model: {model_name} from endpoint: {self.base_url}")
     
-    def infer(self, prompt: str) -> str:
+    def infer(self, content: str|List[Dict[str, Any]]) -> str:
         """
         Run inference on a text prompt, in sync mode
 
         Args:
-            prompt: Text prompt to process
+            content: 
+                Option1. Text prompt to process
+                Option2. List of contents with user's prompts to process
 
         Returns:
             Model's response
@@ -64,8 +66,9 @@ class LLM:
         # Construct messages for the API
         msgs = [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": content}
         ]
+        print(msgs)
         
         response = self._remote_infer(msgs)
         
@@ -74,12 +77,14 @@ class LLM:
             
         return response
     
-    async def async_infer(self, prompt: str) -> str:
+    async def async_infer(self, content: str|List[Dict[str, Any]]) -> str:
         """
         Run inference on a text prompt, in async mode
 
         Args:
-            prompt: Text prompt to process
+            content: 
+                Option1. Text prompt to process
+                Option2. List of contents with user's prompts to process
 
         Returns:
             Model's response
@@ -88,7 +93,7 @@ class LLM:
         # Construct messages for the API
         msgs = [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": content}
         ]
         
         response = await self._async_remote_infer(msgs)
@@ -122,6 +127,7 @@ class LLM:
                     temperature=self.temperature,
                     timeout=self.timeout,
                 )
+                logger.debug(f"API call successful, response:{response}")
 
                 content = response.choices[0].message.content.strip()
                 logger.debug(f"Successfully received response from remote LLM")
@@ -158,6 +164,7 @@ class LLM:
                     temperature=self.temperature,
                     timeout=self.timeout,
                 )
+                logger.debug(f"API call successful, response:{response}")
 
                 content = response.choices[0].message.content.strip()
                 logger.debug(f"Successfully received async response from remote LLM")

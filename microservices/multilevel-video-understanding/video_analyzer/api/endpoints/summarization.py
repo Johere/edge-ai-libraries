@@ -9,7 +9,7 @@ from video_analyzer.schemas.summarization import (
     ErrorResponse,
     SummarizationResponse,
     SummarizationRequest,
-    SummarizerMethodsManager,
+    SummarizerParamsManager,
 )
 from video_analyzer.schemas.state import SummarizationStatus
 from video_analyzer.core.summarizer import ModelConfig, VideoSummarizer
@@ -50,9 +50,10 @@ async def summarize_video(
         video_subtitles = request.video_subtitles
         user_prompt = request.prompt
         method = request.method
+        task = request.task
         
         # Validate summarization method
-        available_methods = SummarizerMethodsManager.list_supported_summarization_methods()
+        available_methods = SummarizerParamsManager.list_supported_summarization_methods()
         if method not in available_methods:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -61,13 +62,23 @@ async def summarize_video(
                     details=f"Unsupported summarization method: {method}, choices: {available_methods}"
                 ).model_dump()
             )
+        available_tasks = SummarizerParamsManager.list_supported_summarization_tasks()
+        if task not in available_tasks:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ErrorResponse(
+                    error_message=f"Summarization failed!",
+                    details=f"Unsupported summarization task: {task}, choices: {available_tasks}"
+                ).model_dump()
+            )
 
         processor_kwargs = request.processor_kwargs
-        logger.debug(f"Summarization parameters: video={video_path}, method={method}, processor_kwargs:\n"
+        logger.debug(f"Summarization parameters: task={task}, video={video_path}, method={method}, processor_kwargs:\n"
                      f"{processor_kwargs}")
         
         # Create a VideoSummarizer instance
         summarizer = VideoSummarizer(
+            task=task,
             video_path=video_path,
             user_prompt=user_prompt,
             video_subtitles=video_subtitles,
@@ -117,7 +128,7 @@ async def summarize_video(
         logger.error(f"Error details: {error_details}")
         
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorResponse(
                 error_message=f"Summarization failed!",
                 details="An error occurred during Summarization. Please check logs for details."
