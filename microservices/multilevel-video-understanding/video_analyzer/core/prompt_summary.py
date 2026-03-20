@@ -183,7 +183,14 @@ class SummaryPrompt(BasePrompt):
 
 
 if __name__ == "__main__":
+	import tiktoken
 	from video_analyzer.utils.summarization_utils import redact_base64
+
+	def num_tokens_from_string(string: str, encoding_name: str) -> int:
+		"""Returns the number of tokens in a text string."""
+		encoding = tiktoken.get_encoding(encoding_name)
+		num_tokens = len(encoding.encode(string))
+		return num_tokens
 
 	# Demo: call SummaryPrompt methods directly (no prompt_builder)
 	sp = SummaryPrompt()
@@ -221,22 +228,44 @@ if __name__ == "__main__":
 		"past_summary": "Previous segment describes an introduction and setup.",
 	}
 
-	print("=== GLOBAL (with question & subtitles) ===\n")
-	print(redact_base64(sp.assign_global_prompt(**global_kwargs_with_all)))
+	# print("=== GLOBAL (with question & subtitles) ===\n")
+	# global_prompt = sp.assign_global_prompt(**global_kwargs_with_all)
+	# # print(redact_base64(global_prompt))
+	# num_tokens = num_tokens_from_string(global_prompt, "cl100k_base")
+	# print(f"Number of tokens: {num_tokens}")
 
 	print("\n=== GLOBAL (no question/subtitles) ===\n")
-	print(redact_base64(sp.assign_global_prompt(**global_kwargs_minimal)))
+	global_prompt_minimal = sp.assign_global_prompt(**global_kwargs_minimal)
+	# print(redact_base64(global_prompt_minimal))
+	num_tokens = num_tokens_from_string(global_prompt_minimal, "cl100k_base")
+	print(f"Number of tokens: {num_tokens}")
 
-	print("\n=== MACRO (with question & subtitles) ===\n")
-	print(redact_base64(sp.assign_macro_prompt(**macro_kwargs)))
+	# print("\n=== MACRO (with question & subtitles) ===\n")
+	# macro_prompt = sp.assign_macro_prompt(**macro_kwargs)
+	# # print(redact_base64(macro_prompt))
+	# num_tokens = num_tokens_from_string(macro_prompt, "cl100k_base")
+	# print(f"Number of tokens: {num_tokens}")
 
 	print("\n=== MACRO (no question/subtitles) ===\n")
-	print(redact_base64(sp.assign_macro_prompt(**macro_kwargs_no_q_sub)))
-	print("\n=== LOCAL (with question & subtitles) ===\n")
-	print(redact_base64(sp.assign_local_prompt(**local_kwargs)))
+	macro_prompt_no_q_sub = sp.assign_macro_prompt(**macro_kwargs_no_q_sub)
+	# print(redact_base64(macro_prompt_no_q_sub))
+	num_tokens = num_tokens_from_string(macro_prompt_no_q_sub, "cl100k_base")
+	print(f"Number of tokens: {num_tokens}")
+	
+	# print("\n=== LOCAL (with question & subtitles) ===\n")
+	# local_prompt = sp.assign_local_prompt(**local_kwargs)
+	# # print(redact_base64(local_prompt))
+	# num_tokens = num_tokens_from_string(local_prompt, "cl100k_base")
+	# print(f"Number of tokens: {num_tokens}")
 
 	print("\n=== LOCAL (no question/subtitles) ===\n")
-	print(redact_base64(sp.assign_local_prompt(**local_kwargs_minimal)))
+	local_prompt_minimal = sp.assign_local_prompt(**local_kwargs_minimal)
+	# print(redact_base64(local_prompt_minimal))
+	num_tokens = num_tokens_from_string(local_prompt_minimal, "cl100k_base")
+	print(f"Number of tokens: {num_tokens}")
 
 	print("\n=== T-MINUS (context prompt) ===\n")
-	print(redact_base64(sp.assign_t_minus_prompt(**tminus_kwargs)))
+	tminus_prompt = sp.assign_t_minus_prompt(**tminus_kwargs)
+	# print(redact_base64(tminus_prompt))
+	num_tokens = num_tokens_from_string(tminus_prompt, "cl100k_base")
+	print(f"Number of tokens: {num_tokens}")
