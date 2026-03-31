@@ -18,9 +18,6 @@ GLOBAL_PROMPT = '''
 你正在分析一段智能家居场景中的冰箱监控视频。请根据以下所有子片段的描述，生成一份连贯的冰箱使用事件摘要。不要提及时间戳。
 用户提问: {question}
 
-##字幕:
-{chunk_subtitle}
-
 ##指南:
 - 以叙事体输出，不要提及具体时间戳（秒或分钟），让摘要读起来像一段完整的描述。
 - 统计并报告以下关键指标：冰箱门打开次数、每次开门的大致时长、涉及的不同人物数量。
@@ -43,9 +40,6 @@ MACRO_CHUNK_PROMPT = '''
 ##任务:
 你正在分析一段智能家居场景中的冰箱监控视频片段。请汇总以下子片段描述，按时间线串联事件，保留关键时间戳。
 用户提问: {question}
-
-##字幕:
-{chunk_subtitle}
 
 ##指南:
 - 按时间顺序串联各子片段的事件，合并同一人物的连续操作。
@@ -74,9 +68,6 @@ LOCAL_PROMPT = '''
 开始时间: {st_tm} 秒
 结束时间: {end_tm} 秒
 用户提问: {question}
-
-##字幕:
-{chunk_subtitle}
 
 ##指南:
 - 重点关注以下内容：
@@ -138,49 +129,40 @@ class RefrigeratorMonitorPrompt(BasePrompt):
 	def assign_global_prompt(self, **kwargs) -> str:
 		template = GLOBAL_PROMPT
 		q = kwargs.get('question', '')
-		subs = kwargs.get('chunk_subtitle', '')
 		rendered = self._render_validated(
 			template,
 			kwargs,
-			optional_fields={"question", "chunk_subtitle"},
+			optional_fields={"question"},
 		)
 		lines = rendered.splitlines()
 		if not str(q).strip():
 			lines = self._remove_user_prompt_line(lines)
-		if not str(subs).strip():
-			lines = self._remove_subtitles_section(lines)
 		return "\n".join(lines) + "\n"
 
 	def assign_macro_prompt(self, **kwargs) -> str:
 		template = MACRO_CHUNK_PROMPT
 		q = kwargs.get('question', '')
-		subs = kwargs.get('chunk_subtitle', '')
 		rendered = self._render_validated(
 			template,
 			kwargs,
-			optional_fields={"question", "chunk_subtitle"},
+			optional_fields={"question"},
 		)
 		lines = rendered.splitlines()
 		if not str(q).strip():
 			lines = self._remove_user_prompt_line(lines)
-		if not str(subs).strip():
-			lines = self._remove_subtitles_section(lines)
 		return "\n".join(lines) + "\n"
 
 	def assign_local_prompt(self, **kwargs) -> str:
 		template = LOCAL_PROMPT
 		q = kwargs.get('question', '')
-		subs = kwargs.get('chunk_subtitle', '')
 		rendered = self._render_validated(
 			template,
 			kwargs,
-			optional_fields={"question", "chunk_subtitle"},
+			optional_fields={"question"},
 		)
 		lines = rendered.splitlines()
 		if not str(q).strip():
 			lines = self._remove_user_prompt_line(lines)
-		if not str(subs).strip():
-			lines = self._remove_subtitles_section(lines)
 		return "\n".join(lines) + "\n"
 
 	def assign_t_minus_prompt(self, **kwargs) -> str:
