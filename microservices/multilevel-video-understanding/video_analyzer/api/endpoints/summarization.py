@@ -46,16 +46,31 @@ async def summarize_video(
     """
     temp_video_path = None
     try:
-        # Parse request parameters; download remote video to local temp file
-        # so downstream libraries (decord via video_chunking) can read it.
-        video_path = validate_video_path(request.video)
-        temp_video_path = download_to_temp(video_path)
-        if temp_video_path:
-            video_path = temp_video_path
+        # Parse request parameters
         video_subtitles = request.video_subtitles
         user_prompt = request.prompt
         method = request.method
         task = request.task
+
+        # Handle caption-only mode: allow video="none" when subtitles are provided
+        if not request.video or str(request.video).lower() == "none":
+            if not video_subtitles:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ErrorResponse(
+                        error_message="Summarization failed!",
+                        details="Either video or video_subtitles must be provided"
+                    ).model_dump()
+                )
+            # Caption-only mode
+            logger.info("Caption-only mode: no video file provided, using subtitles only")
+            video_path = "none"
+        else:
+            # Normal video mode: validate and download video file
+            video_path = validate_video_path(request.video)
+            temp_video_path = download_to_temp(video_path)
+            if temp_video_path:
+                video_path = temp_video_path
 
         # Validate summarization method
         available_methods = SummarizerParamsManager.list_supported_summarization_methods()

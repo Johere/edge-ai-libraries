@@ -103,16 +103,7 @@ class VideoSummarizer:
         # Parse processor_kwargs from user's request
         self.chunking_method = chunking_method
         self.process_fps = process_fps
-        # for sanity
-        if not isinstance(self.process_fps, (int, float)) or self.process_fps <= 0:
-            raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ErrorResponse(
-                        error_message=f"Summarization failed!",
-                        details=f"Invalid process_fps is specified: ({self.process_fps}) "
-                    ).model_dump()
-                )
-        
+
         # Parse subtitles (if has)
         if video_subtitles is not None:
             logger.debug(f"Received video subtitles from request: {video_subtitles}")
@@ -132,13 +123,34 @@ class VideoSummarizer:
                     ).model_dump()
                 )
 
+        # Detect caption-only mode: no video file but subtitles provided
+        self.caption_only = ((video_path is None or str(video_path).lower() == "none") and
+                            video_subtitles is not None and self.subtitles is not None)
+
+        # Validate process_fps (relaxed validation for caption-only mode)
+        if not self.caption_only:
+            # Normal video mode: process_fps must be positive
+            if not isinstance(self.process_fps, (int, float)) or self.process_fps <= 0:
+                raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=ErrorResponse(
+                            error_message=f"Summarization failed!",
+                            details=f"Invalid process_fps is specified: ({self.process_fps}) "
+                        ).model_dump()
+                    )
+        else:
+            # Caption-only mode: process_fps not used, set to dummy value
+            if self.process_fps <= 0:
+                logger.debug(f"Caption-only mode: process_fps={self.process_fps} (ignored)")
+                self.process_fps = 1.0  # Dummy value
+
         # Summarization method
         self.method = method
         self.use_t_minus_1_for_vlm = ((self.method == SUMMARIZATION_METHOD_TYPE.USE_ALL_T_1.value) or \
                                       (self.method == SUMMARIZATION_METHOD_TYPE.USE_VLM_T_1.value))
         self.use_t_minus_1_for_llm = ((self.method == SUMMARIZATION_METHOD_TYPE.USE_ALL_T_1.value) or \
                                       (self.method == SUMMARIZATION_METHOD_TYPE.USE_LLM_T_1.value))
-        
+
         # Create a semaphore to limit concurrent requests
         ## use_concurrent: Whether to use concurrent processing for remote requests
         ## max_concurrent: Maximum number of concurrent requests (default: from config)
@@ -149,12 +161,26 @@ class VideoSummarizer:
         # Thread lock for video reader access to prevent concurrent access issues
         self.vr_lock = threading.RLock()
 
-        # Initialize video reader with lock to prevent concurrent access issues
-        with self.vr_lock:
-            self.vr = robust_video_reader(self.video_path)
-            self.origin_fps = round(self.vr.get_avg_fps())
-            self.numFrame = len(self.vr)
-            self.length = self.numFrame / self.origin_fps
+        # Initialize video reader or use caption-only mode
+        if not self.caption_only:
+            # Normal video mode: open video file
+            with self.vr_lock:
+                self.vr = robust_video_reader(self.video_path)
+                self.origin_fps = round(self.vr.get_avg_fps())
+                self.numFrame = len(self.vr)
+                self.length = self.numFrame / self.origin_fps
+        else:
+            # Caption-only mode: estimate duration from subtitles
+            logger.info("Running in caption-only mode (no video file)")
+            self.vr = None
+            self.origin_fps = 1.0  # Default value
+            self.numFrame = 0
+            # Estimate duration from last subtitle timestamp
+            if self.subtitles:
+                self.length = max(sub['end'] for sub in self.subtitles) if self.subtitles else 60.0
+            else:
+                self.length = 60.0  # Default 1 minute if no subtitles
+            logger.info(f"Estimated duration from subtitles: {self.length:.2f} seconds")
             
         if self.total_levels == 1:
             logger.warning("Received only 1 level in configuration, will be degraded to a generic single level video summarization method that only"
@@ -187,32 +213,37 @@ class VideoSummarizer:
         logger.debug(f"\t[LLM] T-1 promote: {'Enabled' if self.use_t_minus_1_for_llm else 'Disabled'}")
         logger.debug(f"Total levels: {self.total_levels}, with each level group size: {self.level_sizes}")
         
-        # Initialize video chunking method
-        if self.chunking_method == PeltChunking.METHOD_NAME:
-            logger.debug(f"Average duration for video chunks: "
-                         f"[{settings.PELT_CHUNK_CONFIG.min_avg_duration}, {settings.PELT_CHUNK_CONFIG.max_avg_duration}], "
-                         f"Minimum duration for each chunk: {settings.PELT_CHUNK_CONFIG.min_chunk_duration}")
-            if settings.PELT_CHUNK_CONFIG.sample_fps < 0:
-                # -1: use video's original fps
-                settings.PELT_CHUNK_CONFIG.sample_fps = self.origin_fps
-            logger.debug(f"Video chunk sample FPS: {settings.PELT_CHUNK_CONFIG.sample_fps}")
-            self.video_chunker = PeltChunking(**(settings.PELT_CHUNK_CONFIG.model_dump()))
-            
-        elif self.chunking_method == UniformChunking.METHOD_NAME:
-            logger.debug(f"Video chunk duration: {settings.UNIFORM_CHUNK_CONFIG.chunk_duration}")
-            self.video_chunker = UniformChunking(**(settings.UNIFORM_CHUNK_CONFIG.model_dump()))
-            
+        # Initialize video chunking method (skip in caption-only mode)
+        if not self.caption_only:
+            if self.chunking_method == PeltChunking.METHOD_NAME:
+                logger.debug(f"Average duration for video chunks: "
+                             f"[{settings.PELT_CHUNK_CONFIG.min_avg_duration}, {settings.PELT_CHUNK_CONFIG.max_avg_duration}], "
+                             f"Minimum duration for each chunk: {settings.PELT_CHUNK_CONFIG.min_chunk_duration}")
+                if settings.PELT_CHUNK_CONFIG.sample_fps < 0:
+                    # -1: use video's original fps
+                    settings.PELT_CHUNK_CONFIG.sample_fps = self.origin_fps
+                logger.debug(f"Video chunk sample FPS: {settings.PELT_CHUNK_CONFIG.sample_fps}")
+                self.video_chunker = PeltChunking(**(settings.PELT_CHUNK_CONFIG.model_dump()))
+
+            elif self.chunking_method == UniformChunking.METHOD_NAME:
+                logger.debug(f"Video chunk duration: {settings.UNIFORM_CHUNK_CONFIG.chunk_duration}")
+                self.video_chunker = UniformChunking(**(settings.UNIFORM_CHUNK_CONFIG.model_dump()))
+
+            else:
+                raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=ErrorResponse(
+                            error_message=f"Summarization failed!",
+                            details=f"Unsupported video chunking method: {self.chunking_method}, "
+                                    f"choices:[{PeltChunking.METHOD_NAME}, {UniformChunking.METHOD_NAME}]"
+                        ).model_dump()
+                    )
+
+            logger.info(f"Video chunking method: {self.video_chunker.METHOD_NAME}")
         else:
-            raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ErrorResponse(
-                        error_message=f"Summarization failed!",
-                        details=f"Unsupported video chunking method: {self.chunking_method}, "
-                                f"choices:[{PeltChunking.METHOD_NAME}, {UniformChunking.METHOD_NAME}]"
-                    ).model_dump()
-                )
-        
-        logger.info(f"Video chunking method: {self.video_chunker.METHOD_NAME}")
+            # Caption-only mode: no video chunker needed
+            self.video_chunker = None
+            logger.info("Caption-only mode: skipping video chunker initialization")
         
         # Initialize LLM and VLM model serving for inference
         self.llm = LLM(
@@ -239,21 +270,40 @@ class VideoSummarizer:
         # Start processing fro level-0
         level = 0
 
-        # Create micro chunks based on segments
-        listMicroChunk = self.video_chunker.chunk(video_input=self.video_path)
-        for i, micro_chunk in enumerate(listMicroChunk):
-            # for sanity
-            if micro_chunk.time_end > self.length:
-                logger.warning(f"The end time of chunk-{i} exceeds the length of video, "
-                                    f"cut end_time to: {self.length}")
-                micro_chunk.time_end = self.length
-                if micro_chunk.time_st >= micro_chunk.time_end:
-                    logger.warning(f"Invalid chunk at chunk-{i}: start_time = {micro_chunk.time_st}, "
-                                        f"end_time = {micro_chunk.time_end}, drop it.")
-                    continue
-            self.chunk_dict[(micro_chunk.level, micro_chunk.id)] = micro_chunk
+        # Create micro chunks based on segments or subtitles (caption-only mode)
+        if self.caption_only:
+            # Caption-only mode: create chunks from subtitle timestamps
+            logger.info("Creating chunks from subtitles (caption-only mode)")
+            listMicroChunk = []
+            for i, subtitle in enumerate(self.subtitles):
+                micro_chunk = MicroChunkMeta()
+                micro_chunk.id = i
+                micro_chunk.level = 0
+                micro_chunk.time_st = subtitle['start']
+                micro_chunk.time_end = subtitle['end']
+                micro_chunk.fps = 1.0  # No video FPS in caption-only mode
+                micro_chunk.desc = ""
+                listMicroChunk.append(micro_chunk)
+                self.chunk_dict[(micro_chunk.level, micro_chunk.id)] = micro_chunk
+            logger.info(f"Created {len(listMicroChunk)} chunks from subtitles")
+            chunk_level0_fps = 1.0
+        else:
+            # Normal video mode: use video chunker
+            listMicroChunk = self.video_chunker.chunk(video_input=self.video_path)
+            for i, micro_chunk in enumerate(listMicroChunk):
+                # for sanity
+                if micro_chunk.time_end > self.length:
+                    logger.warning(f"The end time of chunk-{i} exceeds the length of video, "
+                                        f"cut end_time to: {self.length}")
+                    micro_chunk.time_end = self.length
+                    if micro_chunk.time_st >= micro_chunk.time_end:
+                        logger.warning(f"Invalid chunk at chunk-{i}: start_time = {micro_chunk.time_st}, "
+                                            f"end_time = {micro_chunk.time_end}, drop it.")
+                        continue
+                self.chunk_dict[(micro_chunk.level, micro_chunk.id)] = micro_chunk
+            chunk_level0_fps = listMicroChunk[0].fps if listMicroChunk else 1.0
+
         self.chunklist_dict[level] = listMicroChunk
-        chunk_level0_fps = listMicroChunk[0].fps
         
         # Start processing next level of chunks
         level += 1
@@ -389,14 +439,26 @@ class VideoSummarizer:
 
     async def summarize_micro_chunk(self, chunk: MicroChunkMeta) -> None:
         """
-        Summarize a micro chunk using vision-language model.
+        Summarize a micro chunk using vision-language model or subtitle text (caption-only mode).
 
         Args:
             chunk: Micro chunk to summarize
         """
-        
+
         # Use semaphore to limit concurrent requests
         async with self._semaphore:
+            # Caption-only mode: use subtitle text directly, skip VLM
+            if self.caption_only:
+                subtitle = await self._get_subtitle(chunk)
+                if subtitle and subtitle.strip():
+                    chunk.desc = subtitle.strip()
+                else:
+                    chunk.desc = "无事件描述"
+                logger.debug(f"Caption-only mode: using subtitle text for chunk {chunk.id}")
+                logger.debug(f"Subtitle content: {chunk.desc[:100]}...")
+                return
+
+            # Normal video mode: extract frames and use VLM
             frames = await self.encode_chunk(chunk)
             subtitle = await self._get_subtitle(chunk)
 
@@ -408,7 +470,7 @@ class VideoSummarizer:
 
             # Prepare question/prompt
             question = assign_local_prompt(task=self.task,
-                                           st_tm=round(chunk.time_st), 
+                                           st_tm=round(chunk.time_st),
                                            end_tm=round(chunk.time_end), chunk_subtitle=subtitle)
 
             # Add previous chunk context if available and enabled

@@ -15,6 +15,7 @@ class TASKNAME(Enum):
     SUMMARY = "summary"
     ENGINE_VALVES_SOP = "engine_valves_sop"
     REFRIGERATOR_MONITOR = "refrigerator_monitor"
+    DAILY_REPORT = "daily_report"
 
 class SUMMARIZATION_METHOD_TYPE(Enum):
     """
