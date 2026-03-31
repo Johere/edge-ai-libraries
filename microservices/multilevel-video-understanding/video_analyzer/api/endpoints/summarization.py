@@ -14,7 +14,7 @@ from video_analyzer.schemas.summarization import (
 from video_analyzer.schemas.state import SummarizationStatus
 from video_analyzer.core.summarizer import ModelConfig, VideoSummarizer
 from video_analyzer.utils.logger import logger
-from video_analyzer.utils.file_utils import validate_video_path
+from video_analyzer.utils.file_utils import validate_video_path, download_to_temp
 
 router = APIRouter()
 model_cfg = ModelConfig()
@@ -44,14 +44,19 @@ async def summarize_video(
     Returns:
         A response with the processing status and summary output
     """
+    temp_video_path = None
     try:
-        # Parse request parameters
+        # Parse request parameters; download remote video to local temp file
+        # so downstream libraries (decord via video_chunking) can read it.
         video_path = validate_video_path(request.video)
+        temp_video_path = download_to_temp(video_path)
+        if temp_video_path:
+            video_path = temp_video_path
         video_subtitles = request.video_subtitles
         user_prompt = request.prompt
         method = request.method
         task = request.task
-        
+
         # Validate summarization method
         available_methods = SummarizerParamsManager.list_supported_summarization_methods()
         if method not in available_methods:
@@ -75,7 +80,7 @@ async def summarize_video(
         processor_kwargs = request.processor_kwargs
         logger.debug(f"Summarization parameters: task={task}, video={video_path}, method={method}, processor_kwargs:\n"
                      f"{processor_kwargs}")
-        
+
         # Create a VideoSummarizer instance
         summarizer = VideoSummarizer(
             task=task,
@@ -91,7 +96,7 @@ async def summarize_video(
             llm_api_key=model_cfg.LLM_API_KEY,
             **(processor_kwargs),
         )
-        
+
         # Perform summarization
         job_id, response = await summarizer.summarize()
 
@@ -100,7 +105,7 @@ async def summarize_video(
             video_duration = response['video_duration']
         except Exception as e:
             raise RuntimeError(f"Failed to generate summary output: {str(e)}")
-        
+
         if summary.startswith("Error:"):
             return SummarizationResponse(
                 status=SummarizationStatus.FAILED,
@@ -110,7 +115,7 @@ async def summarize_video(
                 video_name=video_path,
                 video_duration=video_duration
             )
-        
+
         return SummarizationResponse(
             status=SummarizationStatus.COMPLETED,
             summary=summary,
@@ -121,12 +126,12 @@ async def summarize_video(
         )
     except HTTPException as http_exc:
         raise http_exc
-    
+
     except Exception as e:
         error_details = traceback.format_exc()
         logger.error(f"Summarization failed: {str(e)}")
         logger.error(f"Error details: {error_details}")
-        
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorResponse(
@@ -134,3 +139,10 @@ async def summarize_video(
                 details="An error occurred during Summarization. Please check logs for details."
             ).model_dump()
         )
+    finally:
+        if temp_video_path:
+            import os
+            try:
+                os.unlink(temp_video_path)
+            except OSError:
+                pass
