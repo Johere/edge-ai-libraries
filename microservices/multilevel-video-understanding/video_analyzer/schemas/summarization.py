@@ -14,6 +14,7 @@ class TASKNAME(Enum):
     """Registered task names for prompt builders and pipelines."""
     SUMMARY = "summary"
     ENGINE_VALVES_SOP = "engine_valves_sop"
+    REFRIGERATOR_MONITOR = "refrigerator_monitor"
 
 class SUMMARIZATION_METHOD_TYPE(Enum):
     """
