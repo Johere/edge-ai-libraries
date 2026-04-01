@@ -567,6 +567,10 @@ class VideoSummarizer:
         if len(frame_idx) > settings.MAX_NUM_FRAMES_PER_CHUNK:
             logger.warning(f"Too many frames, reducing the number of frames to the allowed max frames: {settings.MAX_NUM_FRAMES_PER_CHUNK}")
             frame_idx = uniform_sample(frame_idx, settings.MAX_NUM_FRAMES_PER_CHUNK)
+        
+        if len(frame_idx) == 1:
+            logger.debug(f"Only one frame extracted for chunk {chunk.id}, duplicate it to meet the minimum frame requirement for VLM")
+            frame_idx = frame_idx * 2  # duplicate the single frame index
 
         # Use lock to prevent concurrent access to video reader
         with self.vr_lock:

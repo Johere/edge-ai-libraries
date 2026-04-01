@@ -92,7 +92,7 @@ class SummarizationRequest(BaseModel):
             "Notes: Unknown task names may be rejected by the prompt factory;\n"
             "use the defaults unless you explicitly integrate a new task."
         )),
-    ] = TASKNAME.SUMMARY
+    ] = TASKNAME.SUMMARY.value
     processor_kwargs: Annotated[Optional[Dict[str, Union[float, str, int, list[int]]]], 
                                 Field(description="Summarization processing parameters: "
                                       "process_fps, chunking_method, levels, level_sizes, etc.")] = {}
