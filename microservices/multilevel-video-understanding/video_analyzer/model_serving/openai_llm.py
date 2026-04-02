@@ -43,6 +43,8 @@ class LLM:
         self.timeout = settings.MODEL_REQUEST_TIMEOUT
         self.max_retries = settings.MODEL_MAX_RETRIES
         self.temperature = settings.DEFAULT_TEMPERATURE
+        self.max_tokens = settings.DEFAULT_MAX_TOKENS
+        self.enable_thinking = settings.ENABLE_THINKING
         
         # Use remote inference
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
@@ -126,6 +128,12 @@ class LLM:
                     messages=messages,
                     temperature=self.temperature,
                     timeout=self.timeout,
+                    max_tokens=self.max_tokens,
+                    extra_body={
+                        "chat_template_kwargs": {
+                            "enable_thinking": self.enable_thinking
+                        }
+                    },
                 )
                 logger.debug(f"API call successful, response:{response}")
 
@@ -163,6 +171,12 @@ class LLM:
                     messages=messages,
                     temperature=self.temperature,
                     timeout=self.timeout,
+                    max_tokens=self.max_tokens,
+                    extra_body={
+                        "chat_template_kwargs": {
+                            "enable_thinking": self.enable_thinking
+                        }
+                    },
                 )
                 logger.debug(f"API call successful, response:{response}")
 

@@ -67,10 +67,12 @@ class Settings(BaseSettings):
     MODEL_REQUEST_TIMEOUT: int = Field(300, env="MODEL_REQUEST_TIMEOUT")        # Seconds
     MODEL_MAX_RETRIES: int = Field(3, env="MODEL_MAX_RETRIES")
     
-    # Inference parameters    
+    # Inference parameters
     LLM_REMOVE_THINKING: bool = True
     VLM_REMOVE_THINKING: bool = True
     DEFAULT_TEMPERATURE: float = 0.2
+    DEFAULT_MAX_TOKENS: int = Field(512, env="DEFAULT_MAX_TOKENS")
+    ENABLE_THINKING: bool = Field(False, env="ENABLE_THINKING")
     JPEG_QUALITY: int = 90
 
 settings = Settings()
