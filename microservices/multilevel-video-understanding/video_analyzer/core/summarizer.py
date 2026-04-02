@@ -24,6 +24,7 @@ from video_analyzer.utils.summarization_utils import remove_brackets, uniform_sa
 from video_analyzer.utils.logger import logger
 from video_analyzer.utils.file_utils import robust_video_reader
 from video_analyzer.utils.subtitle_utils import load_subtitles, extract_subtitles_for_chunk
+from video_analyzer.utils.performance import ProfileTimer
 from video_analyzer.schemas.summarization import TASKNAME
 
 
@@ -266,7 +267,17 @@ class VideoSummarizer:
         """
         Create hierarchical chunks from the video.
         """
+        metadata = {
+            "method": self.chunking_method,
+            "duration": self.video_duration if hasattr(self, 'video_duration') else self.length,
+            "levels": self.total_levels,
+        }
 
+        with ProfileTimer("video_chunking", metadata):
+            self._chunking_internal()
+
+    def _chunking_internal(self) -> None:
+        """Internal chunking implementation."""
         # Start processing fro level-0
         level = 0
 
@@ -348,6 +359,14 @@ class VideoSummarizer:
         else:
             # only single level
             self.rootLevel = 0
+
+        # Log chunk statistics for performance analysis
+        total_chunks = sum(len(chunks) for chunks in self.chunklist_dict.values())
+        logger.info(f"[CHUNKS] Created {total_chunks} total chunks across {len(self.chunklist_dict)} levels")
+        for level_num, chunks in self.chunklist_dict.items():
+            chunk_durations = [round(c.time_end - c.time_st, 2) for c in chunks]
+            logger.info(f"[CHUNKS] Level {level_num}: {len(chunks)} chunks, durations={chunk_durations}")
+
         logger.debug("Chunking complete")
     
     async def summarize(self) -> Tuple[str, Dict[str, str]]:
@@ -575,8 +594,16 @@ class VideoSummarizer:
         # Use lock to prevent concurrent access to video reader
         with self.vr_lock:
             try:
-                frames = self.vr.get_batch(frame_idx).asnumpy()
-                frames = [Image.fromarray(v.astype('uint8')).resize((settings.VIDEO_FRAME_WIDTH, settings.VIDEO_FRAME_HEIGHT)) for v in frames]
+                # Profile frame extraction
+                with ProfileTimer("frame_extraction", {"chunk_id": chunk.id, "frame_count": len(frame_idx)}):
+                    frames_array = self.vr.get_batch(frame_idx).asnumpy()
+
+                # Profile frame encoding (resize + convert)
+                with ProfileTimer("frame_encoding", {"frame_count": len(frame_idx)}):
+                    frames = [Image.fromarray(v.astype('uint8')).resize((settings.VIDEO_FRAME_WIDTH, settings.VIDEO_FRAME_HEIGHT)) for v in frames_array]
+
+                # Log frame statistics for performance analysis
+                logger.info(f"[FRAMES] Chunk {chunk.id}: extracted {len(frames)} frames, indices={frame_idx}")
                 logger.debug(f"Successfully extracted {len(frames)} frames for chunk {chunk.id}")
             except Exception as e:
                 logger.error(f"Failed to extract frames for chunk {chunk.id}: {e}")

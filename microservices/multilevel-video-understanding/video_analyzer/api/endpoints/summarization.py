@@ -15,6 +15,7 @@ from video_analyzer.schemas.state import SummarizationStatus
 from video_analyzer.core.summarizer import ModelConfig, VideoSummarizer
 from video_analyzer.utils.logger import logger
 from video_analyzer.utils.file_utils import validate_video_path, download_to_temp
+from video_analyzer.utils.performance import ProfileTimer
 
 router = APIRouter()
 model_cfg = ModelConfig()
@@ -96,24 +97,32 @@ async def summarize_video(
         logger.debug(f"Summarization parameters: task={task}, video={video_path}, method={method}, processor_kwargs:\n"
                      f"{processor_kwargs}")
 
-        # Create a VideoSummarizer instance
-        summarizer = VideoSummarizer(
-            task=task,
-            video_path=video_path,
-            user_prompt=user_prompt,
-            video_subtitles=video_subtitles,
-            method=method,
-            vlm_model_name=model_cfg.VLM_MODEL_NAME,
-            llm_model_name=model_cfg.LLM_MODEL_NAME,
-            vlm_base_url=model_cfg.VLM_BASE_URL,
-            llm_base_url=model_cfg.LLM_BASE_URL,
-            vlm_api_key=model_cfg.VLM_API_KEY,
-            llm_api_key=model_cfg.LLM_API_KEY,
-            **(processor_kwargs),
-        )
+        # Profile the entire summarization operation
+        profile_metadata = {
+            "video": video_path,
+            "task": task,
+            "method": method,
+        }
 
-        # Perform summarization
-        job_id, response = await summarizer.summarize()
+        with ProfileTimer("total_summarization", profile_metadata):
+            # Create a VideoSummarizer instance
+            summarizer = VideoSummarizer(
+                task=task,
+                video_path=video_path,
+                user_prompt=user_prompt,
+                video_subtitles=video_subtitles,
+                method=method,
+                vlm_model_name=model_cfg.VLM_MODEL_NAME,
+                llm_model_name=model_cfg.LLM_MODEL_NAME,
+                vlm_base_url=model_cfg.VLM_BASE_URL,
+                llm_base_url=model_cfg.LLM_BASE_URL,
+                vlm_api_key=model_cfg.VLM_API_KEY,
+                llm_api_key=model_cfg.LLM_API_KEY,
+                **(processor_kwargs),
+            )
+
+            # Perform summarization
+            job_id, response = await summarizer.summarize()
 
         try:
             summary = response['summary']

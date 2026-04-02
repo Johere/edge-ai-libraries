@@ -13,6 +13,7 @@ from decord import VideoReader, cpu
 from video_analyzer.schemas.summarization import ErrorResponse
 
 from video_analyzer.utils.logger import logger
+from video_analyzer.utils.performance import ProfileTimer
 
 
 def get_file_duration(file_path: Path) -> float:
@@ -102,16 +103,29 @@ def download_to_temp(video_path: str) -> str | None:
     if scheme not in ("http", "https"):
         return None
 
-    logger.info("Downloading remote video to temp file: %s", video_path)
-    response = requests.get(video_path, stream=True, timeout=60)
-    response.raise_for_status()
+    # Get content length for profiling metadata
+    response_head = requests.head(video_path, timeout=10)
+    content_length = int(response_head.headers.get("content-length", 0))
 
-    suffix = os.path.splitext(urlparse(video_path).path)[1] or ".mp4"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-        temp_path = f.name
+    metadata = {
+        "url": video_path,
+        "content_length_bytes": content_length,
+        "content_length_mb": round(content_length / (1024 * 1024), 2) if content_length > 0 else 0,
+    }
+
+    logger.info("Downloading remote video to temp file: %s (size: %.2f MB)",
+                video_path, metadata["content_length_mb"])
+
+    with ProfileTimer("video_download", metadata):
+        response = requests.get(video_path, stream=True, timeout=60)
+        response.raise_for_status()
+
+        suffix = os.path.splitext(urlparse(video_path).path)[1] or ".mp4"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+            temp_path = f.name
 
     logger.info("Downloaded to: %s", temp_path)
     return temp_path
