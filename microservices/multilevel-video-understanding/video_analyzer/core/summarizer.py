@@ -432,10 +432,54 @@ class VideoSummarizer:
             
             return job_id, response
         
+        except HTTPException:
+            # Re-raise HTTPException as-is (already has proper status code)
+            raise
         except Exception as e:
             logger.error(f"Summarization failed: {e}")
             logger.error(f"Error details: {traceback.format_exc()}")
-            raise RuntimeError(f"Summarization failed: {e}")
+
+            # Provide detailed error response based on exception type
+            error_details = str(e)
+            error_traceback = traceback.format_exc()
+
+            # Detect specific error types and provide helpful messages
+            if "video_reader_backend" in error_details or "decord error" in error_details:
+                error_message = "Video decoding failed"
+                details = (
+                    f"The video file appears to be corrupted or in an unsupported format. "
+                    f"Common causes:\n"
+                    f"  1. Video clip starts from a non-keyframe (damaged header)\n"
+                    f"  2. Incomplete video file (still being written)\n"
+                    f"  3. Unsupported codec or format\n\n"
+                    f"Error: {error_details}\n\n"
+                    f"Suggestion: Ensure video clips are properly extracted with keyframes, "
+                    f"or try re-encoding the video with: ffmpeg -i input.mp4 -c:v libx264 -crf 23 output.mp4"
+                )
+            elif "No such file" in error_details or "FileNotFoundError" in error_details:
+                error_message = "Video file not found"
+                details = f"The specified video file could not be accessed: {error_details}"
+            elif "timeout" in error_details.lower() or "timed out" in error_details.lower():
+                error_message = "Request timeout"
+                details = f"The summarization request took too long to complete: {error_details}"
+            elif "OutOfMemoryError" in error_details or "CUDA out of memory" in error_details:
+                error_message = "Out of memory"
+                details = f"Insufficient memory to process the video: {error_details}"
+            else:
+                error_message = "Summarization failed"
+                details = f"An unexpected error occurred during summarization:\n{error_details}"
+
+            # Include last 3 lines of traceback for debugging
+            traceback_lines = error_traceback.split('\n')
+            relevant_traceback = '\n'.join([line for line in traceback_lines[-10:] if line.strip()])
+
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=ErrorResponse(
+                    error_message=error_message,
+                    details=f"{details}\n\nDebug traceback:\n{relevant_traceback}"
+                ).model_dump()
+            )
 
     async def summarize_micro_chunk(self, chunk: MicroChunkMeta) -> None:
         """
