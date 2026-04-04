@@ -118,6 +118,7 @@ async def summarize_video(
         try:
             summary = response['summary']
             video_duration = response['video_duration']
+            usage = response.get('usage')  # Extract token usage
         except Exception as e:
             raise RuntimeError(f"Failed to generate summary output: {str(e)}")
 
@@ -128,7 +129,8 @@ async def summarize_video(
                 message="Summarization generated error ouputs.",
                 job_id=job_id,
                 video_name=video_path,
-                video_duration=video_duration
+                video_duration=video_duration,
+                usage=usage
             )
 
         return SummarizationResponse(
@@ -137,7 +139,8 @@ async def summarize_video(
             message="Summarization completed successfully",
             job_id=job_id,
             video_name=video_path,
-            video_duration=video_duration
+            video_duration=video_duration,
+            usage=usage
         )
     except HTTPException as http_exc:
         raise http_exc

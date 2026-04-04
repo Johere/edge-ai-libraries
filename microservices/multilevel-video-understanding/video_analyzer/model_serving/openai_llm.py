@@ -49,7 +49,12 @@ class LLM:
         # Use remote inference
         self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
         self.async_client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
-        
+
+        # Token usage tracking (累加每次 vllm-ipex-serving 调用)
+        self.total_prompt_tokens = 0  # Text tokens from vllm-ipex-serving (accumulated)
+        self.total_completion_tokens = 0  # Completion tokens (accumulated)
+        self.total_image_tokens = 0  # Image tokens calculated internally (accumulated)
+
         logger.debug(f"Using remote inference serving with model: {model_name} from endpoint: {self.base_url}")
     
     def infer(self, content: str|List[Dict[str, Any]]) -> str:
@@ -137,6 +142,13 @@ class LLM:
                 )
                 logger.debug(f"API call successful, response:{response}")
 
+                # Extract and accumulate token usage from vllm-ipex-serving
+                if hasattr(response, 'usage') and response.usage:
+                    self.total_prompt_tokens += response.usage.prompt_tokens
+                    self.total_completion_tokens += response.usage.completion_tokens
+                    logger.debug(f"Token usage this call: {response.usage.prompt_tokens} input, "
+                                f"{response.usage.completion_tokens} output")
+
                 content = response.choices[0].message.content.strip()
                 logger.debug(f"Successfully received response from remote LLM")
                 return content
@@ -180,6 +192,13 @@ class LLM:
                 )
                 logger.debug(f"API call successful, response:{response}")
 
+                # Extract and accumulate token usage from vllm-ipex-serving
+                if hasattr(response, 'usage') and response.usage:
+                    self.total_prompt_tokens += response.usage.prompt_tokens
+                    self.total_completion_tokens += response.usage.completion_tokens
+                    logger.debug(f"Token usage this call: {response.usage.prompt_tokens} input, "
+                                f"{response.usage.completion_tokens} output")
+
                 content = response.choices[0].message.content.strip()
                 logger.debug(f"Successfully received async response from remote LLM")
                 return content
@@ -201,3 +220,19 @@ class LLM:
             response = response[index:]
             response = response.replace("</think>\n\n", "").replace("</think>", "")
         return response
+
+    def get_token_usage(self) -> Dict[str, int]:
+        """返回累计的 token 使用统计 (所有 vllm-ipex-serving 调用的总和 + image tokens)"""
+        total = self.total_prompt_tokens + self.total_image_tokens + self.total_completion_tokens
+        return {
+            "prompt_tokens": self.total_prompt_tokens,  # Text prompt tokens only
+            "image_tokens": self.total_image_tokens,
+            "completion_tokens": self.total_completion_tokens,
+            "total_tokens": total,  # Sum of all tokens
+        }
+
+    def reset_token_usage(self):
+        """重置 token 计数器 (用于处理新请求时)"""
+        self.total_prompt_tokens = 0
+        self.total_completion_tokens = 0
+        self.total_image_tokens = 0

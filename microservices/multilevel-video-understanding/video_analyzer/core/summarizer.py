@@ -370,15 +370,28 @@ class VideoSummarizer:
                     logger.error(bad_summary)
                     response = {
                         "summary": bad_summary,
-                        "video_duration": self.length
+                        "video_duration": self.length,
+                        "usage": None  # 错误情况返回 null
                     }
                     return job_id, response
                 await self.summarize_micro_chunk(self.chunklist_dict[0][0])
                 logger.debug("Return summarization with single level and single inference!!")
+
+                # 收集 token 统计 - 合并 VLM 和 LLM 的统计
+                vlm_usage = self.vlm.get_token_usage()
+                llm_usage = self.llm.get_token_usage()
+                token_usage = {
+                    "prompt_tokens": vlm_usage.get("prompt_tokens", 0) + llm_usage.get("prompt_tokens", 0),
+                    "image_tokens": vlm_usage.get("image_tokens", 0) + llm_usage.get("image_tokens", 0),
+                    "completion_tokens": vlm_usage.get("completion_tokens", 0) + llm_usage.get("completion_tokens", 0),
+                    "total_tokens": vlm_usage.get("total_tokens", 0) + llm_usage.get("total_tokens", 0),
+                }
+
                 # Directly return the description of the single level summarization result
                 response = {
                     "summary": self.chunklist_dict[0][0].desc,
-                    "video_duration": self.length
+                    "video_duration": self.length,
+                    "usage": token_usage
                 }
                 return job_id, response
             
@@ -425,11 +438,22 @@ class VideoSummarizer:
             else:
                 logger.info(f"Summarization completed successfully")
 
+            # 收集 token 统计 - 合并 VLM 和 LLM 的统计
+            vlm_usage = self.vlm.get_token_usage()
+            llm_usage = self.llm.get_token_usage()
+            token_usage = {
+                "prompt_tokens": vlm_usage.get("prompt_tokens", 0) + llm_usage.get("prompt_tokens", 0),
+                "image_tokens": vlm_usage.get("image_tokens", 0) + llm_usage.get("image_tokens", 0),
+                "completion_tokens": vlm_usage.get("completion_tokens", 0) + llm_usage.get("completion_tokens", 0),
+                "total_tokens": vlm_usage.get("total_tokens", 0) + llm_usage.get("total_tokens", 0),
+            }
+
             response = {
                 "summary": summary,
-                "video_duration": self.length
+                "video_duration": self.length,
+                "usage": token_usage
             }
-            
+
             return job_id, response
         
         except HTTPException:

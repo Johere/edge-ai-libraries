@@ -11,6 +11,7 @@ from video_analyzer.utils.summarization_utils import redact_base64
 from video_analyzer.core.settings import settings
 
 from video_analyzer.model_serving.openai_llm import LLM
+import math
 
 
 class VLM(LLM):
@@ -33,9 +34,13 @@ class VLM(LLM):
         **kwargs
     ):
         super().__init__(**kwargs)
-        
+
         # Determine if we're using Kimi or Qwen based on model name
         self.individual_frames_in_prompt = "kimi" in self.model_name.lower() or individual_frames_in_prompt
+
+        # Qwen2-VL image token calculation parameters
+        self.spatial_patch_size = 14  # Qwen2-VL uses 14x14 patches
+        self.temporal_patch_size = 2  # Video temporal merge size
     
     def infer(self, frames: List[Image.Image], content: str|List[Dict[str, Any]]) -> str:
         """
@@ -65,11 +70,15 @@ class VLM(LLM):
         logger.debug(f"Sending request with messages: {redact_base64(msgs)}")
         logger.debug(f"API base URL: {self.client.base_url}")
 
+        # Calculate and accumulate image tokens
+        image_tokens = self._calculate_image_tokens(frames)
+        self.total_image_tokens += image_tokens
+
         response = self._remote_infer(msgs)
-        
+
         if self.remove_thinking:
             response = self.remove_think_in_response(response)
-            
+
         return response
     
     async def async_infer(self, frames: List[Image.Image], content: str|List[Dict[str, Any]]) -> str:
@@ -100,8 +109,12 @@ class VLM(LLM):
         logger.debug(f"Sending request with messages: {redact_base64(msgs)}")
         logger.debug(f"API base URL: {self.client.base_url}")
 
+        # Calculate and accumulate image tokens
+        image_tokens = self._calculate_image_tokens(frames)
+        self.total_image_tokens += image_tokens
+
         response = await self._async_remote_infer(msgs)
-        
+
         if self.remove_thinking:
             response = self.remove_think_in_response(response)
         return response
@@ -237,3 +250,42 @@ class VLM(LLM):
             
         # Message
         return [{"role": "user", "content": content}]
+
+    def _calculate_image_tokens(self, frames: List[Image.Image]) -> int:
+        """
+        Calculate image tokens for Qwen2-VL based on frame count and dimensions.
+
+        Qwen2-VL token calculation:
+        - Spatial: Each frame is divided into patches (patch_size=14)
+        - Temporal: Video frames are merged (merge_size=2)
+        - Formula: ceil(num_frames / temporal_patch_size) * ceil(H / spatial_patch_size) * ceil(W / spatial_patch_size)
+
+        Args:
+            frames: List of PIL Image frames
+
+        Returns:
+            Number of image tokens
+        """
+        if not frames:
+            return 0
+
+        num_frames = len(frames)
+
+        # Get dimensions from first frame (assuming all frames have same size)
+        width, height = frames[0].size
+
+        # Calculate spatial tokens per frame
+        spatial_tokens_per_frame = math.ceil(height / self.spatial_patch_size) * math.ceil(width / self.spatial_patch_size)
+
+        # Calculate temporal merged frame count
+        temporal_merged_frames = math.ceil(num_frames / self.temporal_patch_size)
+
+        # Total image tokens
+        image_tokens = temporal_merged_frames * spatial_tokens_per_frame
+
+        logger.debug(f"Image token calculation: {num_frames} frames ({width}x{height}), "
+                    f"spatial_tokens={spatial_tokens_per_frame}/frame, "
+                    f"temporal_merged={temporal_merged_frames}, "
+                    f"total_image_tokens={image_tokens}")
+
+        return image_tokens

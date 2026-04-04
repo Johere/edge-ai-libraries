@@ -106,6 +106,11 @@ class SummarizationResponse(BaseModel):
     job_id: Annotated[Optional[str], Field(description="Unique identifier for the summarization job")] = None
     video_name: Annotated[Optional[str], Field(description="Name of the processed video file")] = None
     video_duration: Annotated[Optional[float], Field(description="Duration of the video in seconds")] = None
+    # Token usage statistics (unified VLM+LLM)
+    usage: Annotated[Optional[Dict[str, int]], Field(description=(
+        "Token usage statistics (unified VLM+LLM). "
+        "Includes prompt_tokens (text only), image_tokens, completion_tokens, and total_tokens."
+    ))] = None
 
 
 class HealthResponse(BaseModel):
