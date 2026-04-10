@@ -629,27 +629,50 @@ class VideoSummarizer:
             raise RuntimeError(f"Only level-0 chunks need to be encoded from video, you are trying to encode a chunk at level {chunk.level}")
         start_frame_index = int(chunk.time_st * self.origin_fps)
         end_frame_index = int(chunk.time_end * self.origin_fps)
+        # Clamp to valid range
+        last_valid_index = self.numFrame - 1
+        start_frame_index = max(0, min(start_frame_index, last_valid_index))
+        end_frame_index = max(0, min(end_frame_index, last_valid_index))
 
         frame_idx = [i for i in range(start_frame_index, end_frame_index, int(self.origin_fps / self.process_fps))]
 
+        # Always include first and last frame for better action recognition
+        if start_frame_index not in frame_idx:
+            frame_idx.insert(0, start_frame_index)
+        if end_frame_index not in frame_idx:
+            frame_idx.append(end_frame_index)
+
         if len(frame_idx) > settings.MAX_NUM_FRAMES_PER_CHUNK:
             logger.warning(f"Too many frames, reducing the number of frames to the allowed max frames: {settings.MAX_NUM_FRAMES_PER_CHUNK}")
-            frame_idx = uniform_sample(frame_idx, settings.MAX_NUM_FRAMES_PER_CHUNK)
-        
-        if len(frame_idx) == 1:
-            logger.debug(f"Only one frame extracted for chunk {chunk.id}, duplicate it to meet the minimum frame requirement for VLM")
-            frame_idx = frame_idx * 2  # duplicate the single frame index
+            # Reserve 2 slots for first and last frame, sample the rest from middle
+            if settings.MAX_NUM_FRAMES_PER_CHUNK > 2:
+                middle_frames = uniform_sample(frame_idx[1:-1], settings.MAX_NUM_FRAMES_PER_CHUNK - 2)
+                frame_idx = [frame_idx[0]] + middle_frames + [frame_idx[-1]]
+            else:
+                frame_idx = [frame_idx[0], frame_idx[-1]]
 
         # Use lock to prevent concurrent access to video reader
         with self.vr_lock:
             try:
-                frames = self.vr.get_batch(frame_idx).asnumpy()
-                frames = [Image.fromarray(v.astype('uint8')).resize((settings.VIDEO_FRAME_WIDTH, settings.VIDEO_FRAME_HEIGHT)) for v in frames]
+                raw_frames = self.vr.get_batch(frame_idx).asnumpy()
+                raw_images = [Image.fromarray(v.astype('uint8')) for v in raw_frames]
+                frames = [img.resize((settings.VIDEO_FRAME_WIDTH, settings.VIDEO_FRAME_HEIGHT)) for img in raw_images]
                 logger.debug(f"Successfully extracted {len(frames)} frames for chunk {chunk.id}")
             except Exception as e:
                 logger.error(f"Failed to extract frames for chunk {chunk.id}: {e}")
                 # Return empty list in case of error
                 return []
+
+        # # Debug: save sampled frames to disk
+        # try:
+        #     video_name = os.path.splitext(os.path.basename(self.video_path))[0]
+        #     debug_dir = f"/tmp/video-summary-debug/{video_name}/chunk-{chunk.id}"
+        #     os.makedirs(debug_dir, exist_ok=True)
+        #     for i, (idx, raw_img, resized_img) in enumerate(zip(frame_idx, raw_images, frames)):
+        #         resized_img.save(os.path.join(debug_dir, f"frame_{i:02d}_idx{idx}_resized.jpg"))
+        #     logger.info(f"Debug frames saved to {debug_dir} ({len(frames)} frames, indices: {frame_idx})")
+        # except Exception as e:
+        #     logger.warning(f"Failed to save debug frames: {e}")
 
         return frames
     
