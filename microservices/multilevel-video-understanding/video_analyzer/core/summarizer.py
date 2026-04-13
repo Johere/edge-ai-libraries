@@ -366,16 +366,27 @@ class VideoSummarizer:
             # total_levels = 1, degrading as a generic VLM summarization method
             if self.rootLevel == 0:
                 if len(self.chunklist_dict[0]) > 1:
-                    bad_summary = f"Error: Speficy total levels = 1, but got several chunks in level-0, this is not allowed!"
-                    logger.error(bad_summary)
-                    response = {
-                        "summary": bad_summary,
-                        "video_duration": self.length,
-                        "usage": None  # 错误情况返回 null
-                    }
-                    return job_id, response
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=ErrorResponse(
+                            error_message="Summarization failed",
+                            details="Specify total levels = 1, but got several chunks in level-0, this is not allowed!"
+                        ).model_dump()
+                    )
                 await self.summarize_micro_chunk(self.chunklist_dict[0][0])
                 logger.debug("Return summarization with single level and single inference!!")
+
+                single_summary = self.chunklist_dict[0][0].desc
+                # Check for errors in single-level result
+                if single_summary.startswith("Error:"):
+                    logger.error(f"Single-level summarization failed: {single_summary}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=ErrorResponse(
+                            error_message="Summarization failed",
+                            details=single_summary
+                        ).model_dump()
+                    )
 
                 # 收集 token 统计 - 合并 VLM 和 LLM 的统计
                 vlm_usage = self.vlm.get_token_usage()
@@ -389,7 +400,7 @@ class VideoSummarizer:
 
                 # Directly return the description of the single level summarization result
                 response = {
-                    "summary": self.chunklist_dict[0][0].desc,
+                    "summary": single_summary,
                     "video_duration": self.length,
                     "usage": token_usage
                 }
@@ -432,9 +443,16 @@ class VideoSummarizer:
 
             # Get the final summary of this video
             summary = self.rootChunk.desc
-            # Check for errors
+            # Check for errors — propagate as HTTP 500 so callers can retry or mark as failed
             if summary.startswith("Error:"):
-                logger.error(f"Summarization failed!")
+                logger.error(f"Summarization failed: {summary}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=ErrorResponse(
+                        error_message="Summarization failed",
+                        details=summary
+                    ).model_dump()
+                )
             else:
                 logger.info(f"Summarization completed successfully")
 
