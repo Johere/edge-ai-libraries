@@ -6,6 +6,8 @@ from video_analyzer.core.prompt_summary import SummaryPrompt
 from video_analyzer.core.prompt_valve_sop import EngineValvesSoPPrompt
 from video_analyzer.core.prompt_summary_refrigerator import RefrigeratorMonitorPrompt
 from video_analyzer.core.prompt_summary_daily_report import DailyReportPrompt
+from video_analyzer.core.prompt_summary_daily_report_en import DailyReportEnPrompt
+from video_analyzer.core.prompt_summary_refrigerator_en import RefrigeratorMonitorEnPrompt
 
 # Backward-compatible module-level API
 def get_prompt_instance(task: str = "summary") -> BasePrompt:
@@ -23,6 +25,12 @@ def get_prompt_instance(task: str = "summary") -> BasePrompt:
 
 	if task == DailyReportPrompt.TASK_NAME:
 		return DailyReportPrompt()
+
+	if task == DailyReportEnPrompt.TASK_NAME:
+		return DailyReportEnPrompt()
+
+	if task == RefrigeratorMonitorEnPrompt.TASK_NAME:
+		return RefrigeratorMonitorEnPrompt()
 
 	raise ValueError(f"Unsupported prompt task: {task}")
 
