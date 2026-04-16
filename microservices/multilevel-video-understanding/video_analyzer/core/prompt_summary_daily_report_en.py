@@ -12,16 +12,17 @@ from video_analyzer.schemas.summarization import TASKNAME
 GLOBAL_PROMPT_EN = '''
 ##Task:
 Summarize the following refrigerator events into a brief report.
-**Important: The timestamps (HH:MM:SS) in the SRT below represent real wall-clock time (Beijing time), not video playback time. For example, 17:03 means 5:03 PM, and 07:30 means 7:30 AM. Use these to determine the user's activity periods (e.g., morning/noon/afternoon/evening/late night).**
+**Important: The timestamps (HH:MM:SS) are real Beijing time in 24-hour format, NOT video playback time. Examples: 06:30 = 6:30 AM, 12:15 = 12:15 PM, 17:03 = 5:03 PM, 22:00 = 10:00 PM. Use these to accurately determine activity periods**
+**Event types: Each SRT entry is prefixed with [motion] or [static]. [motion] = fridge door was opened — count these as door openings. [static] = idle period, no usage — do NOT count as door openings.**
 User prompt: {question}
 
 ##Please strictly follow the template below (replace content in angle brackets; remove entire sections if no content applies):
 
 Today's Refrigerator Activity Summary: <Two or three sentences summarizing main activities, including types of items involved and usage time patterns>
 
-Inventory Alerts:
-- <Item A> is running low, suggest restocking
-- <Item B> has been used up
+Current Inventory (estimated from today's activity):
+- <Item A>: <quantity remaining> — <status: well-stocked / running low / used up>
+- <Item B>: <quantity remaining> — <status>
 
 Suggestions: <One sentence of advice>
 
@@ -52,6 +53,7 @@ MACRO_CHUNK_PROMPT_EN = '''
 ##Task:
 Summarize the refrigerator usage during this period in 2-3 sentences.
 **Note: The timestamps in the events represent real wall-clock time (Beijing time) (e.g., 17:03 = 5:03 PM).**
+**Event types: Each SRT entry is prefixed with [motion] or [static]. [motion] = fridge door was opened — count these as door openings. [static] = idle period, no usage — do NOT count as door openings.**
 Start time: {st_tm} seconds
 End time: {end_tm} seconds
 User prompt: {question}

@@ -285,7 +285,7 @@ class VideoSummarizer:
                 micro_chunk.desc = ""
                 listMicroChunk.append(micro_chunk)
                 self.chunk_dict[(micro_chunk.level, micro_chunk.id)] = micro_chunk
-            logger.info(f"Created {len(listMicroChunk)} chunks from subtitles")
+            logger.info(f"Created {len(listMicroChunk)} chunks from subtitles with multi-level settings: {self.level_sizes}.")
             chunk_level0_fps = 1.0
         else:
             # Normal video mode: use video chunker
