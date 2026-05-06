@@ -95,6 +95,20 @@ LOCAL_PROMPT = '''
 - 输出中不要包含 "开始时间" 和 "结束时间"。
 '''
 
+# Previous context prompt for providing context from previous chunk
+T_MINUS_1_PROMPT = '''
+##上下文:
+前 {dur} 秒的视频总结放在方括号 [] 中。
+**重要** 需要将上一片段的描述视为上下文，并总结接下来的视频片段。
+**重要** 不要在输出中复制上一片段的总结。
+**重要** 注意上一片段中冰箱门的状态和出现的人物，在当前片段描述中保持连贯。
+[
+开始时间: {st_tm} 秒
+结束时间: {end_tm} 秒
+{past_summary}
+]
+'''
+
 T_MINUS_1_PROMPT = '''
 ##前文摘要（不要复制，仅作参考）:
 {past_summary}

@@ -8,12 +8,13 @@ from video_analyzer.core.prompt_summary_refrigerator import RefrigeratorMonitorP
 from video_analyzer.core.prompt_summary_daily_report import DailyReportPrompt
 from video_analyzer.core.prompt_summary_daily_report_en import DailyReportEnPrompt
 from video_analyzer.core.prompt_summary_refrigerator_en import RefrigeratorMonitorEnPrompt
+from video_analyzer.core.prompt_smarthome_child_safety import SmartHomeChildSafetyPrompt
 
 # Backward-compatible module-level API
 def get_prompt_instance(task: str = "summary") -> BasePrompt:
 	"""Factory to get a prompt instance by task name."""
 	task = (task or "").strip().lower()
- 
+
 	if task == SummaryPrompt.TASK_NAME:
 		return SummaryPrompt()
 
@@ -31,6 +32,9 @@ def get_prompt_instance(task: str = "summary") -> BasePrompt:
 
 	if task == RefrigeratorMonitorEnPrompt.TASK_NAME:
 		return RefrigeratorMonitorEnPrompt()
+
+	if task == SmartHomeChildSafetyPrompt.TASK_NAME:
+		return SmartHomeChildSafetyPrompt()
 
 	raise ValueError(f"Unsupported prompt task: {task}")
 

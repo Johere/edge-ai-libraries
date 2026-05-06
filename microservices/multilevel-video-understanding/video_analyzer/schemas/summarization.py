@@ -18,6 +18,7 @@ class TASKNAME(Enum):
     DAILY_REPORT = "daily_report"
     DAILY_REPORT_EN = "daily_report_en"
     REFRIGERATOR_MONITOR_EN = "refrigerator_monitor_en"
+    CHILD_SAFETY_MONITOR = "child_safety_monitor"
 
 class SUMMARIZATION_METHOD_TYPE(Enum):
     """

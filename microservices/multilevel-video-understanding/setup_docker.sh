@@ -104,10 +104,10 @@ echo "Using $ENVIRONMENT environment configuration..."
 
 # Handle docker image build
 if [ "$BUILD_IMAGE" = true ]; then
-  echo "Building Docker image for $ENVIRONMENT environment (--no-cache)..."
-  $DOCKER_CMD build --no-cache 
-  # echo "Building Docker image for $ENVIRONMENT environment"
-  # $DOCKER_CMD build
+  # echo "Building Docker image for $ENVIRONMENT environment (--no-cache)..."
+  # $DOCKER_CMD build --no-cache
+  echo "Building Docker image for $ENVIRONMENT environment ..."
+  $DOCKER_CMD build
   echo "==== Build complete! ===="
 fi
 
