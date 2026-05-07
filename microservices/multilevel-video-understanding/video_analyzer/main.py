@@ -31,6 +31,16 @@ if settings.BACKEND_CORS_ORIGINS:
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 
+@app.on_event("startup")
+def _load_prompt_registry() -> None:
+    """Load runtime-registered video summary task prompts from the cache dir."""
+    try:
+        from video_analyzer.prompts.prompt_registry import get_registry
+        get_registry()  # lazy singleton triggers load()
+    except Exception as e:
+        logger.warning("Prompt registry failed to load at startup: %s", e)
+
+
 if __name__ == "__main__":
     import uvicorn
 

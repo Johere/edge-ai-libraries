@@ -7,7 +7,7 @@ Prompt templates for Engine Valve Workstation SOP Checking on surveillance video
 """
 import base64
 from pathlib import Path
-from video_analyzer.core.prompt_base import BasePrompt
+from video_analyzer.prompts.prompt_base import BasePrompt
 from video_analyzer.schemas.summarization import TASKNAME
 
 

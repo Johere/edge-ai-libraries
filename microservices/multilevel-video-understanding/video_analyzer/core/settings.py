@@ -1,6 +1,7 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
+import os
 from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
@@ -74,5 +75,13 @@ class Settings(BaseSettings):
     DEFAULT_MAX_TOKENS: int = Field(512, env="DEFAULT_MAX_TOKENS")
     ENABLE_THINKING: bool = Field(False, env="ENABLE_THINKING")
     JPEG_QUALITY: int = 90
+
+    # Runtime prompt registry: persistent cache dir for dynamic video summary tasks.
+    # Container bind-mount target; on the host this typically maps to
+    # ~/.cache/.multilevel-video-understanding via docker compose.
+    VIDEO_SUMMARY_CACHE: str = Field(
+        default_factory=lambda: os.path.expanduser("~/.cache/.multilevel-video-understanding"),
+        env="VIDEO_SUMMARY_CACHE",
+    )
 
 settings = Settings()

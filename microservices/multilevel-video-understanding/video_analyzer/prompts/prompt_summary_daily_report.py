@@ -6,7 +6,7 @@
 Prompt templates for daily report generation from refrigerator monitoring events.
 Structured, concise output: statistics + inventory + insights.
 """
-from video_analyzer.core.prompt_base import BasePrompt
+from video_analyzer.prompts.prompt_base import BasePrompt
 from video_analyzer.schemas.summarization import TASKNAME
 
 GLOBAL_PROMPT = '''

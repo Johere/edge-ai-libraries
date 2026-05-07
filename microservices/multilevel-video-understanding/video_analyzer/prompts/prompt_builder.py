@@ -1,18 +1,22 @@
 # Copyright (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-from video_analyzer.core.prompt_base import BasePrompt
-from video_analyzer.core.prompt_summary import SummaryPrompt
-from video_analyzer.core.prompt_valve_sop import EngineValvesSoPPrompt
-from video_analyzer.core.prompt_summary_refrigerator import RefrigeratorMonitorPrompt
-from video_analyzer.core.prompt_summary_daily_report import DailyReportPrompt
-from video_analyzer.core.prompt_summary_daily_report_en import DailyReportEnPrompt
-from video_analyzer.core.prompt_summary_refrigerator_en import RefrigeratorMonitorEnPrompt
-from video_analyzer.core.prompt_smarthome_child_safety import SmartHomeChildSafetyPrompt
+from video_analyzer.prompts.prompt_base import BasePrompt
+from video_analyzer.prompts.prompt_summary import SummaryPrompt
+from video_analyzer.prompts.prompt_valve_sop import EngineValvesSoPPrompt
+from video_analyzer.prompts.prompt_summary_refrigerator import RefrigeratorMonitorPrompt
+from video_analyzer.prompts.prompt_summary_daily_report import DailyReportPrompt
+from video_analyzer.prompts.prompt_summary_daily_report_en import DailyReportEnPrompt
+from video_analyzer.prompts.prompt_summary_refrigerator_en import RefrigeratorMonitorEnPrompt
+from video_analyzer.prompts.prompt_smarthome_child_safety import SmartHomeChildSafetyPrompt
 
 # Backward-compatible module-level API
 def get_prompt_instance(task: str = "summary") -> BasePrompt:
-	"""Factory to get a prompt instance by task name."""
+	"""Factory to get a prompt instance by task name.
+
+	Falls back to the runtime registry (dynamic video summary tasks) when the
+	name doesn't match any built-in. Built-ins take precedence.
+	"""
 	task = (task or "").strip().lower()
 
 	if task == SummaryPrompt.TASK_NAME:
@@ -35,6 +39,14 @@ def get_prompt_instance(task: str = "summary") -> BasePrompt:
 
 	if task == SmartHomeChildSafetyPrompt.TASK_NAME:
 		return SmartHomeChildSafetyPrompt()
+
+	# Dynamic registry fallback. Lazy import avoids a startup cycle: this module
+	# is imported by summarizer which is imported by endpoints which is imported
+	# by router (which also imports the registry-backed /v1/tasks handlers).
+	from video_analyzer.prompts.prompt_registry import get_registry
+	dyn = get_registry().get(task)
+	if dyn is not None:
+		return dyn
 
 	raise ValueError(f"Unsupported prompt task: {task}")
 

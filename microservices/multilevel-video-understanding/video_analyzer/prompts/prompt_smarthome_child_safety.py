@@ -12,7 +12,7 @@ normal play. Local prompts emphasize per-chunk hazard details; macro/global
 prompts aggregate incidents across time with special attention to the most
 severe event in the window.
 """
-from video_analyzer.core.prompt_base import BasePrompt
+from video_analyzer.prompts.prompt_base import BasePrompt
 from video_analyzer.schemas.summarization import TASKNAME
 
 

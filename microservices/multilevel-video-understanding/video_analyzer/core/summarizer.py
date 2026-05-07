@@ -17,7 +17,7 @@ from video_chunking.data import ChunkMeta, MicroChunkMeta, MacroChunkMeta
 from video_analyzer.schemas.summarization import ErrorResponse
 
 from video_analyzer.core.settings import settings
-from video_analyzer.core.prompt_builder import assign_global_prompt, assign_macro_prompt, assign_local_prompt, assign_t_minus_prompt
+from video_analyzer.prompts.prompt_builder import assign_global_prompt, assign_macro_prompt, assign_local_prompt, assign_t_minus_prompt
 from video_analyzer.schemas.summarization import SUMMARIZATION_METHOD_TYPE
 from video_analyzer.model_serving import LLM, VLM
 from video_analyzer.utils.summarization_utils import remove_brackets, uniform_sample, warn_unused_kwargs, redact_base64

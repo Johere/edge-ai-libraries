@@ -46,12 +46,20 @@ class SummarizerParamsManager:
     @staticmethod
     def list_supported_summarization_tasks():
         """
-        Return all supported summarization tasks in class `TASKNAME`
-        
+        Return all supported summarization tasks (built-in + runtime-registered).
+
         Returns:
-            list: a list of TASKNAME members
+            list: a list of task name strings
         """
         available_list = [str(_.value) for _ in TASKNAME]
+        # Include dynamic tasks registered at runtime. Lazy import to avoid
+        # circular dependency at module-load time.
+        try:
+            from video_analyzer.prompts.prompt_registry import get_registry
+            available_list.extend(get_registry().names())
+        except Exception:
+            # Registry unavailable (e.g. during tests) — fall back to built-ins only.
+            pass
         return available_list
 
 

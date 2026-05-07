@@ -5,7 +5,7 @@
 """
 Prompt templates for video summarization.
 """
-from video_analyzer.core.prompt_base import BasePrompt
+from video_analyzer.prompts.prompt_base import BasePrompt
 from video_analyzer.schemas.summarization import TASKNAME
 
 # Global summary prompt for the entire video
