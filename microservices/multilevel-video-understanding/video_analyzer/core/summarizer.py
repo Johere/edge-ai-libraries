@@ -557,7 +557,9 @@ class VideoSummarizer:
             # Prepare question/prompt
             question = assign_local_prompt(task=self.task,
                                            st_tm=round(chunk.time_st),
-                                           end_tm=round(chunk.time_end), chunk_subtitle=subtitle)
+                                           end_tm=round(chunk.time_end),
+                                           question=self.user_prompt,
+                                           chunk_subtitle=subtitle)
 
             # Add previous chunk context if available and enabled
             if self.use_t_minus_1_for_vlm and chunk.id > 0:
