@@ -4,7 +4,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from video_analyzer.api.router import api_router, available_routes
+from video_analyzer.api.router import api_router
 from video_analyzer.core.settings import settings
 from video_analyzer.utils.logger import logger
 
@@ -41,12 +41,22 @@ def _load_prompt_registry() -> None:
         logger.warning("Prompt registry failed to load at startup: %s", e)
 
 
+@app.on_event("startup")
+def _log_available_routes() -> None:
+    """Dump every mounted HTTP route so users can tell at startup what the
+    service exposes. Paths here already carry the API_V1_PREFIX."""
+    logger.info("Available routes are:")
+    for route in app.routes:
+        methods = getattr(route, "methods", None)
+        path = getattr(route, "path", None)
+        if not methods or not path:
+            continue
+        logger.info("Route: %s, Methods: %s", path, ", ".join(sorted(methods)))
+
+
 if __name__ == "__main__":
     import uvicorn
 
-    # List available routes 
-    available_routes()
-    
     uvicorn.run(
         "video_analyzer.main:app",
         host="127.0.0.1",

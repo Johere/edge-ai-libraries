@@ -97,6 +97,7 @@ End time: {end_tm} seconds
 
 class RefrigeratorMonitorEnPrompt(BasePrompt):
     TASK_NAME: str = TASKNAME.REFRIGERATOR_MONITOR_EN.value
+    DESCRIPTION: str = "Fridge camera monitor (English): detect door open/close, items put-in/taken-out, and expiry warnings."
 
     @staticmethod
     def _remove_user_prompt_line(lines):

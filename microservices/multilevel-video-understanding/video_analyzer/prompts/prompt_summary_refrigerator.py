@@ -97,6 +97,7 @@ T_MINUS_1_PROMPT = '''
 
 class RefrigeratorMonitorPrompt(BasePrompt):
 	TASK_NAME: str = TASKNAME.REFRIGERATOR_MONITOR.value
+	DESCRIPTION: str = "冰箱摄像头监控（中文）：识别开关门、取/放食材、食物过期等事件。"
 
 	@staticmethod
 	def _remove_user_prompt_line(lines):

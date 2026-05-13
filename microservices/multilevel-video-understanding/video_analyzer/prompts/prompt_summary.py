@@ -100,6 +100,7 @@ End time: {end_tm} sec
 
 class SummaryPrompt(BasePrompt):
 	TASK_NAME: str = TASKNAME.SUMMARY.value
+	DESCRIPTION: str = "General-purpose video summarization for arbitrary scenes — default task when no domain-specific prompt applies."
  
 	@staticmethod
 	def _remove_user_prompt_line(lines):

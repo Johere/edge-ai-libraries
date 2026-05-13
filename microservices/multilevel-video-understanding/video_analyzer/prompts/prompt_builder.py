@@ -8,7 +8,7 @@ from video_analyzer.prompts.prompt_summary_refrigerator import RefrigeratorMonit
 from video_analyzer.prompts.prompt_summary_daily_report import DailyReportPrompt
 from video_analyzer.prompts.prompt_summary_daily_report_en import DailyReportEnPrompt
 from video_analyzer.prompts.prompt_summary_refrigerator_en import RefrigeratorMonitorEnPrompt
-from video_analyzer.prompts.prompt_smarthome_child_safety import SmartHomeChildSafetyPrompt
+
 
 # Backward-compatible module-level API
 def get_prompt_instance(task: str = "summary") -> BasePrompt:
@@ -36,9 +36,6 @@ def get_prompt_instance(task: str = "summary") -> BasePrompt:
 
 	if task == RefrigeratorMonitorEnPrompt.TASK_NAME:
 		return RefrigeratorMonitorEnPrompt()
-
-	if task == SmartHomeChildSafetyPrompt.TASK_NAME:
-		return SmartHomeChildSafetyPrompt()
 
 	# Dynamic registry fallback. Lazy import avoids a startup cycle: this module
 	# is imported by summarizer which is imported by endpoints which is imported

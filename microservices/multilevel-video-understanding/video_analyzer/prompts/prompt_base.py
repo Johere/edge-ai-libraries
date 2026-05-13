@@ -7,6 +7,9 @@ from abc import ABC, abstractmethod
 class BasePrompt(ABC):
 	"""Abstract base for prompt builders."""
 	task_name: str = ""
+	# One-line human-readable description, surfaced by /v1/tasks so users can
+	# tell what each registered task is for. Subclasses should override.
+	DESCRIPTION: str = ""
 
 	@staticmethod
 	def _get_template_fields(template: str):

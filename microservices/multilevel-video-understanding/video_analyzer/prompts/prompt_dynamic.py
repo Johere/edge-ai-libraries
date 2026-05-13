@@ -15,7 +15,7 @@ class DynamicPrompt(BasePrompt):
     """Runtime-registered prompt set.
 
     Each section string may contain `{question}` as an optional placeholder
-    (stripped when question is empty, mirroring the SmartHomeChildSafetyPrompt
+    (stripped when question is empty, mirroring the RefrigeratorMonitorPrompt
     convention). The T-minus-1 section has stricter required fields — see
     _render_validated calls below.
     """
@@ -39,7 +39,7 @@ class DynamicPrompt(BasePrompt):
     def _strip_empty_question_line(rendered: str) -> str:
         """Drop lines starting with '用户提问:' when the question is empty.
 
-        Matches the RefrigeratorMonitorPrompt / SmartHomeChildSafetyPrompt behavior.
+        Matches the RefrigeratorMonitorPrompt behavior.
         """
         lines = rendered.splitlines()
         lines = [ln for ln in lines if not ln.strip().startswith("用户提问:")]

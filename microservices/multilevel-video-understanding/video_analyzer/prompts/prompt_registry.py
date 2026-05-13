@@ -444,6 +444,15 @@ class PromptRegistry:
             "PromptRegistry: loaded %d dynamic tasks from %s",
             len(self._records), self._tasks_dir,
         )
+        # Human-readable dump of every task currently available to the service
+        # (built-in + dynamic). Helps users confirm what /v1/summary can route
+        # to right after startup / reload.
+        for row in self.list_all():
+            desc = row.get("description") or "(no description)"
+            logger.info(
+                "PromptRegistry: available task  %-30s  source=%-7s  %s",
+                row["name"], row["source"], desc,
+            )
 
     # ----- queries -----
     @staticmethod
@@ -455,11 +464,25 @@ class PromptRegistry:
             return sorted(self._records.keys())
 
     def list_all(self) -> List[dict]:
-        """Built-in + dynamic, each tagged."""
-        out = [
-            {"name": t.value, "source": "builtin", "description": None}
-            for t in TASKNAME
-        ]
+        """Built-in + dynamic, each tagged. Pulls each builtin's one-line
+        DESCRIPTION class attribute so users can tell what each task does."""
+        # Lazy import to avoid a prompt_builder → prompt_registry cycle at
+        # module import time. `get_prompt_instance` is cheap — each builtin
+        # class is stateless and construction is basically free.
+        from video_analyzer.prompts.prompt_builder import get_prompt_instance
+
+        out: List[dict] = []
+        for t in TASKNAME:
+            desc: Optional[str] = None
+            try:
+                inst = get_prompt_instance(t.value)
+                raw = getattr(inst, "DESCRIPTION", "")
+                if isinstance(raw, str) and raw.strip():
+                    desc = raw.strip()
+            except Exception:
+                # Never let a broken builtin break the registry listing.
+                desc = None
+            out.append({"name": t.value, "source": "builtin", "description": desc})
         with self._lock:
             for rec in self._records.values():
                 out.append(

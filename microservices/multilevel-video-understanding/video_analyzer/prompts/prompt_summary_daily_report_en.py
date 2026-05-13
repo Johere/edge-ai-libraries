@@ -105,6 +105,7 @@ End time: {end_tm} seconds
 
 class DailyReportEnPrompt(BasePrompt):
     TASK_NAME: str = TASKNAME.DAILY_REPORT_EN.value
+    DESCRIPTION: str = "Daily report (English): compose a natural-language summary from a day's subtitles / event timeline."
 
     @staticmethod
     def _remove_user_prompt_line(lines):

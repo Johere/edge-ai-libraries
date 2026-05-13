@@ -119,6 +119,7 @@ T_MINUS_1_PROMPT = '''
 
 class DailyReportPrompt(BasePrompt):
 	TASK_NAME: str = TASKNAME.DAILY_REPORT.value
+	DESCRIPTION: str = "日报生成（中文）：基于当日字幕/事件时间轴汇总一段自然语言报告。"
 
 	@staticmethod
 	def _remove_user_prompt_line(lines):

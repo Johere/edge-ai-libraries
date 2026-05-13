@@ -172,6 +172,7 @@ T_MINUS_1_PROMPT = '''
 
 class EngineValvesSoPPrompt(BasePrompt):
     TASK_NAME: str = TASKNAME.ENGINE_VALVES_SOP.value
+    DESCRIPTION: str = "Engine-valve standard-operating-procedure compliance check: flag procedural deviations frame by frame."
     
     def __init__(self):
         base_dir = Path(__file__).resolve().parent
