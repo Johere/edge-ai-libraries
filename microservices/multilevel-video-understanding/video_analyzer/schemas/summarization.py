@@ -91,7 +91,7 @@ class SummarizationRequest(BaseModel):
             "- 'USE_ALL_T-1': Both stages rely on previous chunk context for maximum coherence.\n"
             "Notes: Prefer the default unless you explicitly tune temporal dependencies."
         )),
-    ] = SUMMARIZATION_METHOD_TYPE.USE_ALL_T_1
+    ] = SUMMARIZATION_METHOD_TYPE.USE_ALL_T_1.value
     task: Annotated[
         Optional[str],
         Field(description=(
